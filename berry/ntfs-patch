@@ -1,0 +1,3941 @@
+diff -Nuarp grub-0.97/configure.in grub-0.97+/configure.in
+--- grub-0.97/configure.in	2009-12-30 14:53:52.000000000 +0900
++++ grub-0.97+/configure.in	2009-12-30 14:55:53.000000000 +0900
+@@ -13,7 +13,7 @@ dnl LIABILITY OF ANY KIND FOR ANY DAMAGE
+ dnl USE OF THIS SOFTWARE.
+
+ AC_PREREQ(2.57)
+-AC_INIT([GRUB], [0.97], [bug-grub@gnu.org])
++AC_INIT([GRUB], [0.97+], [bug-grub@gnu.org])
+ AC_CONFIG_SRCDIR([stage2/stage2.c])
+ AC_CONFIG_HEADER([config.h])
+ AM_INIT_AUTOMAKE
+@@ -311,6 +311,13 @@ if test x"$enable_fat" != xno; then
+   FSYS_CFLAGS="$FSYS_CFLAGS -DFSYS_FAT=1"
+ fi
+
++AC_ARG_ENABLE(ntfs
++  [  --disable-ntfs          disable NTFS support in Stage 2])
++
++if test x"$enable_ntfs" != xno; then
++  FSYS_CFLAGS="$FSYS_CFLAGS -DFSYS_NTFS=1"
++fi
++
+ AC_ARG_ENABLE(ffs,
+   [  --disable-ffs           disable FFS support in Stage 2])
+
+diff -Nuarp grub-0.97/stage2/Makefile.am grub-0.97+/stage2/Makefile.am
+--- grub-0.97/stage2/Makefile.am	2009-12-30 14:53:52.000000000 +0900
++++ grub-0.97+/stage2/Makefile.am	2009-12-30 15:00:18.000000000 +0900
+@@ -21,13 +21,13 @@ noinst_LIBRARIES = libgrub.a
+ endif
+ libgrub_a_SOURCES = boot.c builtins.c char_io.c cmdline.c common.c \
+ 	disk_io.c fsys_ext2fs.c fsys_fat.c fsys_ffs.c fsys_iso9660.c \
+-	fsys_jfs.c fsys_minix.c fsys_reiserfs.c fsys_ufs2.c \
++	fsys_jfs.c fsys_minix.c fsys_ntfs.c fsys_reiserfs.c fsys_ufs2.c \
+ 	fsys_vstafs.c fsys_xfs.c gunzip.c md5.c serial.c stage2.c \
+ 	terminfo.c tparm.c graphics.c efistubs.c
+ libgrub_a_CFLAGS = $(GRUB_CFLAGS) -I$(top_srcdir)/lib \
+ 	-DGRUB_UTIL=1 -DFSYS_EXT2FS=1 -DFSYS_FAT=1 -DFSYS_FFS=1 \
+ 	-DFSYS_ISO9660=1 -DFSYS_JFS=1 -DFSYS_MINIX=1 -DFSYS_REISERFS=1 \
+-	-DFSYS_UFS2=1 -DFSYS_VSTAFS=1 -DFSYS_XFS=1 \
++	-DFSYS_UFS2=1 -DFSYS_VSTAFS=1 -DFSYS_XFS=1 -DFSYS_NTFS=1 \
+ 	-DUSE_MD5_PASSWORDS=1 -DSUPPORT_SERIAL=1 -DSUPPORT_HERCULES=1
+
+ # Stage 2 and Stage 1.5's.
+@@ -39,23 +39,23 @@ EXTRA_PROGRAMS = nbloader.exec pxeloader
+
+ if DISKLESS_SUPPORT
+ pkgdata_DATA = stage2 stage2_eltorito e2fs_stage1_5 fat_stage1_5 \
+-	ffs_stage1_5 iso9660_stage1_5 jfs_stage1_5 minix_stage1_5 \
++	ffs_stage1_5 iso9660_stage1_5 jfs_stage1_5 minix_stage1_5 ntfs_stage1_5 \
+ 	reiserfs_stage1_5 ufs2_stage1_5 vstafs_stage1_5 xfs_stage1_5 \
+ 	nbgrub pxegrub
+ noinst_DATA = pre_stage2 start start_eltorito nbloader pxeloader diskless
+ noinst_PROGRAMS = pre_stage2.exec start.exec start_eltorito.exec \
+ 	e2fs_stage1_5.exec fat_stage1_5.exec ffs_stage1_5.exec \
+-	iso9660_stage1_5.exec jfs_stage1_5.exec minix_stage1_5.exec \
++	iso9660_stage1_5.exec jfs_stage1_5.exec minix_stage1_5.exec ntfs_stage1_5.exec \
+ 	reiserfs_stage1_5.exec ufs2_stage1_5.exec vstafs_stage1_5.exec \
+ 	xfs_stage1_5.exec nbloader.exec pxeloader.exec diskless.exec
+ else
+ pkgdata_DATA = stage2 stage2_eltorito e2fs_stage1_5 fat_stage1_5 \
+-	ffs_stage1_5 iso9660_stage1_5 jfs_stage1_5 minix_stage1_5 \
++	ffs_stage1_5 iso9660_stage1_5 jfs_stage1_5 minix_stage1_5 ntfs_stage1_5 \
+ 	reiserfs_stage1_5 ufs2_stage1_5 vstafs_stage1_5 xfs_stage1_5
+ noinst_DATA = pre_stage2 start start_eltorito
+ noinst_PROGRAMS = pre_stage2.exec start.exec start_eltorito.exec \
+ 	e2fs_stage1_5.exec fat_stage1_5.exec ffs_stage1_5.exec \
+-	iso9660_stage1_5.exec jfs_stage1_5.exec minix_stage1_5.exec \
++	iso9660_stage1_5.exec jfs_stage1_5.exec minix_stage1_5.exec ntfs_stage1_5.exec \
+ 	reiserfs_stage1_5.exec ufs2_stage1_5.exec vstafs_stage1_5.exec \
+ 	xfs_stage1_5.exec
+ endif
+@@ -98,7 +98,7 @@ STAGE2_COMPILE = $(STAGE2_CFLAGS) -fno-b
+
+ libstage2_a_SOURCES = boot.c builtins.c char_io.c cmdline.c common.c \
+ 	disk_io.c fsys_ext2fs.c fsys_fat.c fsys_ffs.c fsys_iso9660.c \
+-	fsys_jfs.c fsys_minix.c fsys_reiserfs.c fsys_ufs2.c \
++	fsys_jfs.c fsys_minix.c fsys_ntfs.c fsys_reiserfs.c fsys_ufs2.c \
+ 	fsys_vstafs.c fsys_xfs.c gunzip.c md5.c serial.c stage2.c \
+ 	terminfo.c tparm.c efistubs.c
+ libstage2_a_CFLAGS = $(STAGE2_COMPILE) $(FSYS_CFLAGS)
+@@ -111,7 +111,7 @@ STAGE1_5_COMPILE = $(STAGE2_COMPILE) -DN
+ # For stage2 target.
+ pre_stage2_exec_SOURCES = asm.S bios.c boot.c builtins.c char_io.c \
+ 	cmdline.c common.c console.c disk_io.c fsys_ext2fs.c \
+-	fsys_fat.c fsys_ffs.c fsys_iso9660.c fsys_jfs.c fsys_minix.c \
++	fsys_fat.c fsys_ffs.c fsys_iso9660.c fsys_jfs.c fsys_minix.c fsys_ntfs.c \
+ 	fsys_reiserfs.c fsys_ufs2.c fsys_vstafs.c fsys_xfs.c gunzip.c \
+ 	hercules.c md5.c serial.c smp-imps.c stage2.c terminfo.c tparm.c \
+ 	graphics.c
+@@ -183,6 +183,16 @@ fat_stage1_5_exec_CCASFLAGS = $(STAGE1_5
+ fat_stage1_5_exec_LDFLAGS = $(STAGE1_5_LINK)
+ fat_stage1_5_exec_LDADD = @LIBGCC@
+
++# For ntfs_stage1_5 target.
++ntfs_stage1_5_exec_SOURCES = start.S asm.S common.c char_io.c disk_io.c \
++	stage1_5.c fsys_ntfs.c bios.c
++ntfs_stage1_5_exec_CFLAGS = $(STAGE1_5_COMPILE) -DFSYS_NTFS=1 \
++	-DNO_BLOCK_FILES=1
++ntfs_stage1_5_exec_CCASFLAGS = $(STAGE1_5_COMPILE) -DFSYS_NTFS=1 \
++	-DNO_BLOCK_FILES=1
++ntfs_stage1_5_exec_LDFLAGS = $(STAGE1_5_LINK)
++ntfs_stage1_5_exec_LDADD = @LIBGCC@
++
+ # For ffs_stage1_5 target.
+ ffs_stage1_5_exec_SOURCES = start.S asm.S common.c char_io.c disk_io.c \
+ 	stage1_5.c fsys_ffs.c bios.c
+diff -Nuarp grub-0.97/stage2/builtins.c grub-0.97+/stage2/builtins.c
+--- grub-0.97/stage2/builtins.c	2009-12-30 14:53:52.000000000 +0900
++++ grub-0.97+/stage2/builtins.c	2009-12-30 14:53:00.000000000 +0900
+@@ -4200,6 +4200,7 @@ setup_func (char *arg, int flags)
+     {"iso9660",  "/iso9660_stage1_5"},
+     {"jfs",      "/jfs_stage1_5"},
+     {"minix",    "/minix_stage1_5"},
++    {"ntfs",     "/ntfs_stage1_5"},
+     {"reiserfs", "/reiserfs_stage1_5"},
+     {"vstafs",   "/vstafs_stage1_5"},
+     {"xfs",      "/xfs_stage1_5"}
+diff -urN grub-0.97/stage2/char_io.c grub-0.97+/stage2/char_io.c
+--- grub-0.97/stage2/char_io.c	2005-02-02 05:51:23.000000000 +0900
++++ grub-0.97+/stage2/char_io.c	2005-11-13 21:11:57.000000000 +0900
+@@ -1161,7 +1161,9 @@
+
+   return 0;
+ }
++#endif /* ! STAGE1_5 */
+
++#if !defined(STAGE1_5) || defined(FSYS_NTFS)
+ int
+ grub_strlen (const char *str)
+ {
+@@ -1172,7 +1174,7 @@
+
+   return len;
+ }
+-#endif /* ! STAGE1_5 */
++#endif /* ! STAGE1_5 || FSYS_NTFS */
+
+ int
+ memcheck (int addr, int len)
+diff -Nuarp grub-0.97/stage2/disk_io.c grub-0.97+/stage2/disk_io.c
+--- grub-0.97/stage2/disk_io.c	2009-12-30 14:53:52.000000000 +0900
++++ grub-0.97+/stage2/disk_io.c	2009-12-30 14:53:00.000000000 +0900
+@@ -83,6 +83,9 @@ struct fsys_entry fsys_table[NUM_FSYS +
+ # ifdef FSYS_UFS2
+   {"ufs2", ufs2_mount, ufs2_read, ufs2_dir, 0, ufs2_embed},
+ # endif
++# ifdef FSYS_NTFS
++  {"ntfs", ntfs_mount, ntfs_read, ntfs_dir, 0, 0},
++#endif
+ # ifdef FSYS_ISO9660
+   {"iso9660", iso9660_mount, iso9660_read, iso9660_dir, 0, 0},
+ # endif
+diff -Nuarp grub-0.97/stage2/filesys.h grub-0.97+/stage2/filesys.h
+--- grub-0.97/stage2/filesys.h	2009-12-30 14:53:52.000000000 +0900
++++ grub-0.97+/stage2/filesys.h	2009-12-30 15:15:53.000000000 +0900
+@@ -135,11 +135,20 @@ int iso9660_dir (char *dirname);
+ #define FSYS_ISO9660_NUM 0
+ #endif
+
++#ifdef FSYS_NTFS
++#define FSYS_NTFS_NUM 1
++int ntfs_mount (void);
++int ntfs_read (char *buf, int len);
++int ntfs_dir (char *dirname);
++#else
++#define FSYS_NTFS_NUM 0
++#endif
++
+ #ifndef NUM_FSYS
+ #define NUM_FSYS	\
+   (FSYS_FFS_NUM + FSYS_FAT_NUM + FSYS_EXT2FS_NUM + FSYS_MINIX_NUM	\
+    + FSYS_REISERFS_NUM + FSYS_VSTAFS_NUM + FSYS_JFS_NUM + FSYS_XFS_NUM	\
+-   + FSYS_TFTP_NUM + FSYS_EFI_TFTP_NUM + FSYS_ISO9660_NUM + FSYS_UFS2_NUM)
++   + FSYS_TFTP_NUM + FSYS_EFI_TFTP_NUM + FSYS_ISO9660_NUM + FSYS_UFS2_NUM + FSYS_NTFS_NUM)
+ #endif
+
+ /* defines for the block filesystem info area */
+diff -Nuarp grub-0.97/stage2/fsys_ntfs.c grub-0.97+/stage2/fsys_ntfs.c
+--- grub-0.97/stage2/fsys_ntfs.c	1970-01-01 09:00:00.000000000 +0900
++++ grub-0.97+/stage2/fsys_ntfs.c	2009-12-30 14:53:00.000000000 +0900
+@@ -0,0 +1,1146 @@
++/* vim: set sw=4 :*/
++/*
++ *  GRUB  --  GRand Unified Bootloader
++ *  Copyright (C) 1999  Free Software Foundation, Inc.
++ *
++ *  This program is free software; you can redistribute it and/or modify
++ *  it under the terms of the GNU General Public License as published by
++ *  the Free Software Foundation; either version 2 of the License, or
++ *  (at your option) any later version.
++ *
++ *  This program is distributed in the hope that it will be useful,
++ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
++ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ *  GNU General Public License for more details.
++ *
++ *  You should have received a copy of the GNU General Public License
++ *  along with this program; if not, write to the Free Software
++ *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
++ */
++
++/*
++ * Samuel Leo <samuel@_.remove.me._szonline.net>
++ * Limitations:
++ * 1. Only 32 bit size support
++ * 2. don't support >1k MFT record size, >16k INDEX record size
++ * 3. don't support recursive at_attribute_list
++ * 4. don't support compressed attribute other than Datastream
++ * 5. all MFT's at_attribute_list must resident at first run list
++ * 6. don't support journaling
++ * 7. don't support EFS encryption
++ * 8. don't support mount point and junction
++ */
++#ifdef FSYS_NTFS
++
++//#define DEBUG_NTFS 1
++
++/*
++#define NO_ATTRIBUTE_LIST 1
++   totally disable at_attribute_list support,
++   if no compressed/fragment file and MFT,
++   not recommended
++#define NO_NON_RESIDENT_ATTRIBUTE_LIST 1
++   disable non-resident at_attribute_list support,
++   if no huge compressed/fragment file and MFT
++#define NO_NTFS_DECOMPRESSION 1
++   disable ntfs compressed file support
++#define NO_ALTERNATE_DATASTREAM 1
++   disable ntfs alternate datastream support
++*/
++
++#include "shared.h"
++#include "filesys.h"
++
++#ifdef STAGE1_5
++/* safe turn off non-resident attribute list if MFT fragments < 4000 */
++//#define NO_NON_RESIDENT_ATTRIBUTE_LIST 1
++#define NO_NTFS_DECOMPRESSION 1
++#endif
++
++#define MAX_MFT_RECORD_SIZE 1024
++#define MAX_INDEX_RECORD_SIZE 16384
++#define MAX_INDEX_BITMAP_SIZE 4096
++#define DECOMP_DEST_BUFFER_SIZE 16384
++#define DECOMP_SOURCE_BUFFER_SIZE (8192+2)
++#define MAX_DIR_DEPTH 64
++
++/* sizes are always in bytes, BLOCK values are always in DEV_BSIZE (sectors) */
++#define DEV_BSIZE 512
++
++/* include/linux/fs.h */
++#define BLOCK_SIZE 	512
++
++#define WHICH_SUPER 1
++#define SBLOCK (WHICH_SUPER * BLOCK_SIZE / DEV_BSIZE)	/* = 2 */
++
++/* include/asm-i386/type.h */
++typedef __signed__ char __s8;
++typedef unsigned char __u8;
++typedef __signed__ short __s16;
++typedef unsigned short __u16;
++typedef __signed__ int __s32;
++typedef unsigned int __u32;
++typedef __signed__ long long __s64;
++typedef unsigned long long __u64;
++
++#define FILE_MFT      0
++#define FILE_MFTMIRR  1
++#define FILE_LOGFILE  2
++#define FILE_VOLUME   3
++#define FILE_ATTRDEF  4
++#define FILE_ROOT     5
++#define FILE_BITMAP   6
++#define FILE_BOOT     7
++#define FILE_BADCLUS  8
++#define FILE_QUOTA    9
++#define FILE_UPCASE  10
++
++#define at_standard_information 0x10
++#define at_attribute_list 	0x20
++#define at_filename		0x30
++#define at_security_descriptor	0x50
++#define at_data			0x80
++#define at_index_root		0x90
++#define at_index_allocation	0xa0
++#define at_bitmap		0xb0
++#define at_symlink		0xc0
++
++#define NONAME	""
++#define ATTR_NORMAL	0
++#define ATTR_COMPRESSED	1
++#define ATTR_RESIDENT	2
++#define ATTR_ENCRYPTED	16384
++#define ATTR_SPARSE	32768
++
++typedef struct run_list {
++	char *start;
++	char *ptr;
++	int svcn;
++	int evcn;
++	int vcn;
++	int cnum0;
++	int cnum;
++	int clen;
++} RUNL;
++
++typedef struct ntfs_mft_record {
++	char mft[MAX_MFT_RECORD_SIZE];
++	char mft2[MAX_MFT_RECORD_SIZE];
++	int attr_type;
++	char *attr_name;
++	int attr_flag;
++	int attr_size;
++	char *attr;
++	int attr_len;
++	RUNL runl;
++	char *attr_list;
++	int attr_list_len;
++	int attr_list_size;
++	int attr_list_off;
++	char attr_list_buf[2*BLOCK_SIZE];
++	RUNL attr_list_runl;
++} MFTR;
++
++
++#define index_data	((char *)FSYS_BUF)
++#define bitmap_data	((__u8 *)(FSYS_BUF+MAX_INDEX_RECORD_SIZE))
++#define dcdbuf	((__u8 *)index_data)
++#define dcsbuf	(bitmap_data)
++#define dcend	(dcsbuf+DECOMP_SOURCE_BUFFER_SIZE)
++#define fnbuf ((char *)(bitmap_data+MAX_INDEX_BITMAP_SIZE))
++#define mmft	((MFTR *)dcend)
++#define cmft	((MFTR *)(dcend+sizeof(MFTR)))
++#define mft_run	((RUNL *)(dcend+2*sizeof(MFTR)))
++#define path_ino ((int *)(dcend+2*sizeof(MFTR)+sizeof(RUNL)))
++#define cluster16 (path_ino+MAX_DIR_DEPTH)
++#define index16 cluster16[16]
++#define blocksize cluster16[17]
++#define clustersize cluster16[18]
++#define mft_record_size cluster16[19]
++#define index_record_size cluster16[20]
++#define dcvcn cluster16[21]
++#define dcoff cluster16[22]
++#define dclen cluster16[23]
++#define dcrem cluster16[24]
++#define dcslen cluster16[25]
++#define dcsptr ((__u8 *)cluster16[26])
++#define is_ads_completion cluster16[27]
++
++static int read_mft_record(int mftno, char *mft, int self);
++static int read_attribute(MFTR *mftr, int offset, char *buf, int len, RUNL *from_rl);
++static int get_next_run(RUNL *runl);
++
++static inline int
++nsubstring (char *s1, char *s2)
++{
++    while (tolower(*s1) == tolower(*s2))
++    {
++	/* The strings match exactly. */
++	if (! *(s1++))
++	    return 0;
++	s2 ++;
++    }
++
++    /* S1 is a substring of S2. */
++    if (*s1 == 0)
++	return -1;
++
++    /* S1 isn't a substring. */
++    return 1;
++}
++
++static int fixup_record(char *record, char *magic, int size)
++{
++    int start, count, offset;
++    __u16 fixup;
++
++    if(*(int *)record != *(int *)magic)
++	return 0;
++    start=*(__u16 *)(record+4);
++    count=*(__u16 *)(record+6);
++    count--;
++    if(size && blocksize*count != size)
++	return 0;
++    fixup = *(__u16 *)(record+start);
++    start+=2;
++    offset=blocksize-2;
++    while(count--){
++	if(*(__u16 *)(record+offset)!=fixup)
++	    return 0;
++	*(__u16 *)(record+offset) = *(__u16 *)(record+start);
++	start+=2;
++	offset+=blocksize;
++    }
++    return 1;
++}
++
++static void rewind_run_list( RUNL *runl) {
++    runl->vcn = runl->svcn;
++    runl->ptr = runl->start;
++    runl->cnum0 = 0;
++    runl->cnum = 0;
++    runl->clen = 0;
++}
++
++static int get_next_run(RUNL *runl){
++    int t, n, v;
++
++#ifdef DEBUG_NTFS
++    printf("get_next_run: s=%d e=%d c=%d start=%x ptr=%x\n",
++	   runl->svcn, runl->evcn, runl->vcn, runl->start, runl->ptr);
++#endif
++
++    runl->vcn += runl->clen;
++    if(runl->vcn > runl->evcn) {
++    	return 0;
++    }
++
++    t = *(runl->ptr)++;
++    n = t&0xf;
++    runl->clen = 0; v = 1;
++    while(n--) {
++	runl->clen += v * *((__u8 *)runl->ptr)++;
++	v <<= 8;
++    }
++    n = (t>>4)&0xf;
++    if(n==0)
++	runl->cnum = 0;
++    else {
++	int c = 0;
++	v = 1;
++	while(n--) {
++	    c += v * *((__u8 *)runl->ptr)++;
++	    v <<= 8;
++	}
++	if(c & (v>>1)) c -= v;
++	runl->cnum0 += c;
++	runl->cnum = runl->cnum0;
++    }
++#ifdef DEBUG_NTFS
++    printf("got_next_run: t=%x cluster %x len %x vcn=%x ecn=%x\n",
++    	t, runl->cnum, runl->clen, runl->vcn, runl->evcn);
++#endif
++    return 1;
++}
++
++#ifndef NO_ATTRIBUTE_LIST
++static void init_run_list(char *attr, int len, RUNL *runl) {
++    int allocated;
++
++    runl->svcn = *(__u32 *)(attr+0x10); /* only support 32 bit */
++    runl->evcn = *(__u32 *)(attr+0x18); /* only support 32 bit */
++    runl->start = attr + *(__u16 *)(attr+0x20);
++    allocated = *(__u32 *)(attr+0x28);
++    if(!runl->evcn) runl->evcn = (allocated - 1) / clustersize;
++#ifdef DEBUG_NTFS
++    printf("size %d allocated=%d inited=%d cegin=%x csize=%d vcn=%d-%d\n",
++	    /*attr_size*/ *(__u32 *)(attr+0x30),
++	    /*allocated*/ *(__u32 *)(attr+0x28),
++	    /*attr_inited*/ *(__u32 *)(attr+0x38),
++	    /*cengin*/ *(__u16 *)(attr+0x22),
++	    /*csize*/ *(__u16 *)(attr+0x40),
++	    runl->svcn, runl->evcn);
++#endif
++    rewind_run_list(runl);
++}
++#endif
++
++
++static int find_attribute(char *mft, int type, char *name, char **attr, int *size, int *len, int *flag) {
++    int t, l, r, n, i, namelen;
++    unsigned short *attr_name;
++
++    n = strlen(name);
++    r = mft_record_size - *(__u16 *)(mft+0x14);
++    mft += *(__u16 *)(mft+0x14);
++    while( (t = *(__s32 *)mft) != -1 ) {
++	l = *(__u32 *)(mft+4);
++	if(l>r) break;
++#ifdef DEBUG_NTFS
++	printf("type = %x len = %d namelen=%d resident=%d compresed=%d attrno=%d\n",
++		t, l,
++		/*namelen*/ *(mft+9),
++		//name = (__u16 *)(mft + *(__u16 *)(mft+10)),
++		/*resident */ (*(mft+8) == 0),
++		/*compressed*/ *(__u16 *)(mft+12),
++		/*attrno*/ *(__u16 *)(mft+14));
++#endif
++	namelen = *(mft+9);
++	if(t == type) {
++#ifndef STAGE1_5
++#ifndef NO_ALTERNATE_DATASTREAM
++	    if(is_ads_completion && type == at_data) {
++		if(namelen && namelen >= n &&
++		   (!*(mft+8)/*resident*/ || !*(__u32 *)(attr+0x10)/*svcn==0*/))
++		{
++		    for(i=0, attr_name=(__u16 *)(mft + *(__u16 *)(mft+10)); i < n; i++)
++			if(tolower(name[i]) != tolower(attr_name[i]))
++			    break;
++		    if(i >= n) {
++			for(; i < namelen; i++)
++			    name[i] = attr_name[i];
++			name[i] = '\0';
++			if(print_possibilities > 0)
++			    print_possibilities = -print_possibilities;
++			print_a_completion(fnbuf);
++			name[n] = '\0';
++		    }
++		}
++	    } else
++#endif
++#endif
++		if(namelen == n) {
++
++		for(i=0, attr_name=(__u16 *)(mft + *(__u16 *)(mft+10)); i<n; i++)
++		    if(tolower(name[i]) != tolower(attr_name[i]))
++			break;
++		if(i>=n) {
++		    if(flag) *flag = *(__u16 *)(mft+12);
++		    if(*(mft+8) == 0) {
++			if(flag) *flag |= ATTR_RESIDENT;
++#ifdef DEBUG_NTFS
++			printf("resident data at %x size %x indexed=%d\n",
++			       /*data*/ *(__u16 *)(mft+0x14),
++			       /*attr_size*/ *(__u16 *)(mft+0x10),
++			       /*indexed*/ *(__u16 *)(mft+0x16));
++#endif
++			if(attr) *attr = mft + *(__u16 *)(mft+0x14);
++			if(size) *size = *(__u16 *)(mft+0x10);
++			if(len) *len = *(__u16 *)(mft+0x10);
++		    } else {
++			if(attr) *attr = mft;
++			if(size) *size = *(__u32 *)(mft+0x30);
++			if(len) *len = l;
++		    }
++		    return 1;
++		}
++	    }
++	}
++	mft += l;
++	r -= l;
++    }
++    return 0;
++}
++
++#ifndef NO_ATTRIBUTE_LIST
++static __u32 get_next_attribute_list(MFTR *mftr, int *size) {
++    int l, t, mftno;
++#ifdef DEBUG_NTFS
++    printf("get_next_attribute_list: type=%x\n",mftr->attr_type);
++#endif
++again:
++    while(mftr->attr_list_len>0x14) {
++	t = *(__u32 *)(mftr->attr_list + 0);
++	l = *(__u16 *)(mftr->attr_list + 4);
++#ifdef DEBUG_NTFS
++	printf("attr_list type=%x len=%x remain=%x\n", t, l, mftr->attr_list_len);
++#endif
++	if(l==0 || l>mftr->attr_list_len) return 0;
++	mftno = *(__u32 *)(mftr->attr_list + 0x10);
++	mftr->attr_list_len -= l;
++	mftr->attr_list += l;
++	if(t==mftr->attr_type)
++	{
++#ifdef DEBUG_NTFS
++	printf("attr_list mftno=%x\n", mftno);
++#endif
++	    if(read_mft_record(mftno, mftr->mft2, (mftr==mmft))==0)
++		break;
++	    if(find_attribute(mftr->mft2, mftr->attr_type, mftr->attr_name,
++			&mftr->attr, size, &mftr->attr_len, &mftr->attr_flag))
++		return 1;
++	}
++    }
++#ifndef NO_NON_RESIDENT_ATTRIBUTE_LIST
++    if(mftr->attr_list_off < mftr->attr_list_size) {
++	int len = mftr->attr_list_size - mftr->attr_list_off;
++	if(len > BLOCK_SIZE) len = BLOCK_SIZE;
++
++	if(mftr->attr_list_len)
++	    memmove(mftr->attr_list_buf, mftr->attr_list, mftr->attr_list_len);
++	mftr->attr_list = mftr->attr_list_buf;
++
++	if(read_attribute( NULL, mftr->attr_list_off,
++			mftr->attr_list_buf + mftr->attr_list_len,
++			len, &mftr->attr_list_runl) != len)
++	{
++#ifdef DEBUG_NTFS
++	    printf("CORRUPT NON-RESIDENT ATTRIBUTE_LIST\n");
++#endif
++	    /* corrupt */
++	    errnum = ERR_FSYS_CORRUPT;
++	    mftr->attr_list_size = 0;
++	    mftr->attr_len = 0;
++	    mftr->attr_list = NULL;
++	    return 0;
++	}
++
++	mftr->attr_list_len += len;
++	mftr->attr_list_off += len;
++	goto again;
++    }
++#endif
++    mftr->attr_list = NULL;
++    return 0;
++}
++#endif
++
++static int search_attribute( MFTR *mftr, int type, char *name)
++{
++#ifdef DEBUG_NTFS
++    printf("searching attribute %x <%s>\n", type, name);
++#endif
++
++    mftr->attr_type = type;
++    mftr->attr_name = name;
++    mftr->attr_list = NULL;
++    mftr->attr_list_len = 0;
++    mftr->attr_list_size = 0;
++    mftr->attr_list_off = 0;
++    dcrem = dclen = 0;
++
++#ifndef NO_ATTRIBUTE_LIST
++    if(find_attribute(mftr->mft, at_attribute_list, NONAME,
++		      &mftr->attr_list, &mftr->attr_list_size,
++		      &mftr->attr_list_len, &mftr->attr_list_off)) {
++	if(mftr->attr_list_off&ATTR_RESIDENT) {
++	    /* resident at_attribute_list */
++	    mftr->attr_list_size = 0;
++#ifdef DEBUG_NTFS
++	    printf("resident attribute_list len=%x\n", mftr->attr_list_len);
++#endif
++	} else {
++#ifdef DEBUG_NTFS
++	    printf("non-resident attribute_list len=%x size=%x\n",
++		   mftr->attr_list_len, mftr->attr_list_size);
++#endif
++#ifndef NO_NON_RESIDENT_ATTRIBUTE_LIST
++	    init_run_list(mftr->attr_list, mftr->attr_list_len, &mftr->attr_list_runl);
++	    if(get_next_run(&mftr->attr_list_runl)==0 ||
++	       mftr->attr_list_runl.cnum==0)
++		mftr->attr_list_size = 0;
++#endif
++	    mftr->attr_list = NULL;
++	    mftr->attr_list_len = 0;
++	}
++    }
++#endif
++
++    if(find_attribute(mftr->mft, type, name,
++		      &mftr->attr, &mftr->attr_size, &mftr->attr_len,
++		      &mftr->attr_flag)
++#ifndef NO_ATTRIBUTE_LIST
++       || get_next_attribute_list(mftr, &mftr->attr_size)
++#endif
++       )
++    {
++#ifndef NO_ATTRIBUTE_LIST
++	if(!(mftr->attr_flag&ATTR_RESIDENT)){
++	    init_run_list(mftr->attr, mftr->attr_len, &mftr->runl);
++	    if(get_next_run(&mftr->runl)==0) {
++		mftr->attr_flag |= ATTR_RESIDENT;
++		mftr->attr_len = 0;
++	    }
++	}
++#endif
++
++	return 1;
++    }
++
++    mftr->attr_type = 0;
++    return 0;
++}
++
++static int get_run( RUNL *rl, int vcn, int *clp, int *lenp) {
++    if(rl->evcn < vcn)
++	return 0;
++
++    if(rl->vcn > vcn) {
++    	rewind_run_list(rl);
++	get_next_run(rl);
++    }
++
++    while(rl->vcn+rl->clen <= vcn)
++    {
++	if(get_next_run(rl)==0)
++	    return 0;
++    }
++
++    if(clp) *clp = rl->cnum == 0 ? 0 : rl->cnum + vcn - rl->vcn;
++    if(lenp) *lenp = rl->clen - vcn + rl->vcn;
++    return 1;
++}
++
++static int search_run(MFTR *mftr, int vcn) {
++
++    if( mftr->attr==NULL && !search_attribute(mftr, mftr->attr_type, mftr->attr_name))
++	return 0;
++
++    if(mftr->runl.svcn > vcn)
++	search_attribute(mftr, mftr->attr_type, mftr->attr_name);
++
++#ifdef NO_ATTRIBUTE_LIST
++    if(mftr->runl.evcn < vcn)
++	return 0;
++#else
++    while(mftr->runl.evcn < vcn) {
++	if(get_next_attribute_list(mftr, NULL)==0) {
++	    mftr->attr = NULL;
++	    return 0;
++	}
++	init_run_list(mftr->attr, mftr->attr_len, &mftr->runl);
++	if(get_next_run(&mftr->runl)==0) {
++	    mftr->attr = NULL;
++	    return 0;
++	}
++    }
++#endif
++
++    return 1;
++}
++
++static int read_attribute(MFTR *mftr, int offset, char *buf, int len, RUNL *from_rl) {
++    int vcn;
++    int cnum, clen;
++    int done = 0;
++    int n;
++    RUNL *rl;
++
++    if(!from_rl && (mftr->attr_flag & ATTR_RESIDENT)) {
++	/* resident attribute */
++	if(offset > mftr->attr_len)
++	    return 0;
++	if(offset+len > mftr->attr_len)
++	    len = mftr->attr_len - offset;
++	memmove( buf, mftr->attr + offset, len);
++	return len;
++    }
++
++    vcn = offset / clustersize;
++    offset %= clustersize;
++
++    while(len>0) {
++	if(from_rl)
++	    rl = from_rl;
++	else if(search_run(mftr, vcn) == 0)
++	    break;
++	else
++	    rl = &mftr->runl;
++	if(get_run(rl, vcn, &cnum, &clen) == 0)
++	    break;
++	if(cnum==0 && from_rl)
++	    break;
++	n = clen * clustersize - offset;
++	if(n > len) n = len;
++	if(cnum==0) {
++	    memset( buf, 0, n);
++	} else if(!devread(cnum*(clustersize>>9)+(offset>>9), offset&0x1ff, n, buf))
++	    break;
++
++	buf += n;
++	vcn += (offset+n)/clustersize;
++	done += n;
++	offset = 0;
++	len -= n;
++    }
++    return done;
++}
++
++static int read_mft_record(int mftno, char *mft, int self){
++#ifdef DEBUG_NTFS
++    printf("Reading MFT record: mftno=%d\n", mftno);
++#endif
++    if( read_attribute( mmft, mftno * mft_record_size,
++	    mft, mft_record_size, self?mft_run:NULL) != mft_record_size)
++	return 0;
++    if(!fixup_record( mft, "FILE", mft_record_size))
++	return 0;
++    return 1;
++}
++
++#ifndef NO_NTFS_DECOMPRESSION
++static int get_16_cluster(MFTR *mftr, int vcn) {
++    int n = 0, cnum, clen;
++    while(n < 16 && search_run(mftr, vcn) && get_run(&mftr->runl, vcn, &cnum, &clen) && cnum) {
++	if(clen > 16 - n)
++	    clen = 16 - n;
++	vcn += clen;
++	while(clen--)
++	    cluster16[n++] = cnum++;
++    }
++    cluster16[n] = 0;
++    return n;
++}
++
++static inline int compressed_block_size( unsigned char *src ) {
++    return 3 + (*(__u16 *)src & 0xfff);
++}
++
++static int decompress_block(unsigned char *dest, unsigned char *src) {
++    int head;
++    int copied=0;
++    unsigned char *last;
++    int bits;
++    int tag=0;
++
++    /* high bit indicates that compression was performed */
++    if(!(*(__u16 *)src & 0x8000)) {
++	memmove(dest,src+2,0x1000);
++	return 0x1000;
++    }
++
++    if((head = *(__u16 *)src & 0xFFF)==0)
++	/* block is not used */
++	return 0;
++
++    src += 2;
++    last = src+head;
++    bits = 0;
++
++    while(src<=last)
++    {
++	if(copied>4096)
++	{
++#ifdef DEBUG_NTFS
++	    printf("decompress error 1\n");
++#endif
++	    errnum = ERR_FSYS_CORRUPT;
++	    return 0;
++	}
++	if(!bits){
++	    tag=*(__u8 *)src;
++	    bits=8;
++	    src++;
++	    if(src>last)
++		break;
++	}
++	if(tag & 1){
++	    int i,len,delta,code,lmask,dshift;
++	    code = *(__u16 *)src;
++	    src+=2;
++	    if(!copied)
++	    {
++#ifdef DEBUG_NTFS
++		printf("decompress error 2\n");
++#endif
++		errnum = ERR_FSYS_CORRUPT;
++		return 0;
++	    }
++	    for(i=copied-1,lmask=0xFFF,dshift=12;i>=0x10;i>>=1)
++	    {
++		lmask >>= 1;
++		dshift--;
++	    }
++	    delta = code >> dshift;
++	    len = (code & lmask) + 3;
++	    for(i=0; i<len; i++)
++	    {
++		dest[copied]=dest[copied-delta-1];
++		copied++;
++	    }
++	} else
++	    dest[copied++]=*(__u8 *)src++;
++	tag>>=1;
++	bits--;
++    }
++
++    return copied;
++}
++#endif
++
++int ntfs_read(char *buf, int len){
++    int ret;
++#ifdef STAGE1_5
++/* stage2 can't be resident/compressed/encrypted files,
++ * but does sparse flag, cause stage2 never sparsed
++ */
++    if((cmft->attr_flag&~ATTR_SPARSE) != ATTR_NORMAL)
++	return 0;
++    disk_read_func = disk_read_hook;
++    ret = read_attribute(cmft, filepos, buf, len, 0);
++    disk_read_func = NULL;
++    filepos += ret;
++#else
++
++#ifndef NO_NTFS_DECOMPRESSION
++    int off;
++    int vcn;
++    int size;
++#endif
++
++    if(len<=0 || filepos > cmft->attr_size || (cmft->attr_flag&ATTR_ENCRYPTED))
++	return 0;
++
++    if(filepos+len > cmft->attr_size)
++	len = cmft->attr_size - filepos;
++
++    if((cmft->attr_flag&(ATTR_COMPRESSED|ATTR_RESIDENT)) != ATTR_COMPRESSED) {
++	if(cmft->attr_flag==ATTR_NORMAL)
++	    disk_read_func = disk_read_hook;
++	ret = read_attribute(cmft, filepos, buf, len, 0);
++	if(cmft->attr_flag==ATTR_NORMAL)
++	    disk_read_func = NULL;
++	filepos += ret;
++	return ret;
++    }
++
++    ret = 0;
++
++#ifndef NO_NTFS_DECOMPRESSION
++    /* NTFS don't support compression if cluster size > 4k */
++    if(clustersize > 4096) {
++	errnum = ERR_FSYS_CORRUPT;
++	return 0;
++    }
++
++    while(len > 0){
++	if(filepos >= dcoff && filepos < (dcoff+dclen)) {
++	    size = dcoff + dclen - filepos;
++	    if(size > len) size = len;
++	    memmove( buf, dcdbuf + filepos - dcoff, size);
++	    filepos += size;
++	    len -= size;
++	    ret += size;
++	    if(len==0)
++		return ret;
++	    buf += size;
++	}
++
++	vcn = filepos / clustersize / 16;
++	vcn *= 16;
++	off = filepos % (16 * clustersize);
++	if( dcvcn != vcn || filepos < dcoff)
++	    dcrem = 0;
++
++	if(dcrem) {
++	    int head;
++
++	    /* reading source */
++	    if(dcslen < 2 || compressed_block_size(dcsptr) > dcslen) {
++		if(cluster16[index16]==0) {
++		    errnum = ERR_FSYS_CORRUPT;
++		    return ret;
++		}
++		if(dcslen)
++		    memmove(dcsbuf, dcsptr, dcslen);
++		dcsptr = dcsbuf;
++		while((dcslen+clustersize) < DECOMP_SOURCE_BUFFER_SIZE) {
++		    if(cluster16[index16]==0)
++			break;
++		    if(!devread(cluster16[index16]*(clustersize>>9), 0, clustersize, dcsbuf+dcslen))
++			return ret;
++		    dcslen += clustersize;
++		    index16++;
++		}
++	    }
++	    /* flush destination */
++	    dcoff += dclen;
++	    dclen = 0;
++
++	    while(dcrem && dclen < DECOMP_DEST_BUFFER_SIZE &&
++		  dcslen >= 2 && (head=compressed_block_size(dcsptr)) <= dcslen) {
++		size = decompress_block(dcdbuf+dclen, dcsptr);
++		if(dcrem>=0x1000 && size!=0x1000) {
++		    errnum = ERR_FSYS_CORRUPT;
++		    return ret;
++		}
++		dcrem -= size;
++		dclen += size;
++		dcsptr += head;
++		dcslen -= head;
++	    }
++	    continue;
++	}
++	dclen = dcrem = 0;
++	switch(get_16_cluster(cmft, vcn)) {
++	case 0:
++	    /* sparse */
++	    size = 16 * clustersize - off;
++	    if( len < size )
++		size = len;
++#ifndef STAGE1_5
++	    memset( buf, 0, size);
++#endif
++	    filepos += size;
++	    len -= size;
++	    ret += size;
++	    buf += size;
++	    break;
++
++	case 16:
++	    /* uncompressed */
++	    index16 = off / clustersize;
++	    off %= clustersize;
++	    while(index16 < 16) {
++		size = clustersize - off;
++		if( len < size )
++		    size = len;
++		if(!devread(cluster16[index16]*(clustersize>>9)+(off>>9), off&0x1ff, size, buf))
++		    return ret;
++		filepos += size;
++		len -= size;
++		ret += size;
++		if(len==0)
++		    return ret;
++		off = 0;
++		buf += size;
++		index16++;
++	    }
++	    break;
++
++	default:
++	    index16 = 0;
++	    dcvcn = vcn;
++	    dcoff = vcn * clustersize;
++	    dcrem = filemax - dcoff;
++	    if(dcrem > 16 * clustersize)
++		dcrem = 16 * clustersize;
++	    dcsptr = dcsbuf;
++	    dcslen = 0;
++	}
++    }
++#endif
++#endif
++    return ret;
++}
++
++int ntfs_mount (void)
++{
++    char *sb = (char *)FSYS_BUF;
++    int mft_record;
++    int spc;
++
++  if (((current_drive & 0x80) || (current_slice != 0))
++       && (current_slice != /*PC_SLICE_TYPE_NTFS*/7)
++       && (current_slice != /*PC_SLICE_TYPE_NTFS*/0x17))
++      return 0;
++
++    if (!devread (0, 0, 512, (char *) FSYS_BUF))
++	return 0;			/* Cannot read superblock */
++
++    if(sb[3]!='N' || sb[4]!='T' || sb[5]!='F' || sb[6]!='S')
++	return 0;
++    blocksize = *(__u16 *)(sb+0xb);
++    spc = *(unsigned char *)(sb+0xd);
++    clustersize = spc * blocksize;
++    mft_record_size = *(char *)(sb+0x40);
++    index_record_size = *(char *)(sb+0x44);
++    if(mft_record_size>0)
++	mft_record_size *= clustersize;
++    else
++	mft_record_size = 1 << (-mft_record_size);
++
++    index_record_size *= clustersize;
++    mft_record = *(__u32 *)(sb+0x30); /* only support 32 bit */
++    spc = clustersize / 512;
++
++    if(mft_record_size > MAX_MFT_RECORD_SIZE || index_record_size > MAX_INDEX_RECORD_SIZE) {
++	/* only support 1k MFT record, 4k INDEX record */
++	return 0;
++    }
++
++#ifdef DEBUG_NTFS
++    printf("spc=%x mft_record=%x:%x\n", spc, *(__s64 *)(sb+0x30));
++#endif
++
++    if (!devread (mft_record*spc, 0, mft_record_size, mmft->mft))
++	return 0;			/* Cannot read superblock */
++
++    if(!fixup_record( mmft->mft, "FILE", mft_record_size))
++	return 0;
++
++#ifndef NO_ALTERNATE_DATASTREAM
++    is_ads_completion = 0;
++#endif
++    if(!search_attribute(mmft, at_data, NONAME)) return 0;
++
++    *mft_run = mmft->runl;
++
++    *path_ino = FILE_ROOT;
++
++    return 1;
++}
++
++int
++ntfs_dir (char *dirname)
++{
++    char *rest, ch;
++    int namelen;
++    int depth = 0;
++    int chk_sfn = 1;
++    int flag = 0;
++    int record_offset;
++    int my_index_record_size;
++    unsigned char *index_entry = 0, *entry, *index_end;
++    int i;
++
++    /* main loop to find desired directory entry */
++loop:
++
++#ifdef DEBUG_NTFS
++    printf("dirname=%s\n", dirname);
++#endif
++    if(!read_mft_record(path_ino[depth], cmft->mft, 0))
++    {
++#ifdef DEBUG_NTFS
++	printf("MFT error 1\n");
++#endif
++	errnum = ERR_FSYS_CORRUPT;
++	return 0;
++    }
++
++    /* if we have a real file (and we're not just printing possibilities),
++       then this is where we want to exit */
++
++    if (!*dirname || isspace (*dirname) || *dirname==':')
++    {
++#ifndef STAGE1_5
++#ifndef NO_ALTERNATE_DATASTREAM
++	if (*dirname==':' && print_possibilities) {
++	    char *tmp;
++
++	    /* preparing ADS name completion */
++	    for(tmp = dirname; *tmp != '/'; tmp--);
++	    for(tmp++, rest=fnbuf; *tmp && !isspace(*tmp); *rest++ = *tmp++)
++		if(*tmp==':') dirname = rest;
++	    *rest++ = '\0';
++
++	    is_ads_completion = 1;
++	    search_attribute(cmft, at_data, dirname+1);
++	    is_ads_completion = 0;
++
++	    if(errnum==0) {
++		if(print_possibilities < 0)
++		    return 1;
++		errnum = ERR_FILE_NOT_FOUND;
++	    }
++	    return 0;
++	}
++#endif
++#endif
++
++	if (*dirname==':') dirname++;
++	for (rest = dirname; (ch = *rest) && !isspace (ch); rest++);
++	*rest = 0;
++
++	if (!search_attribute(cmft, at_data, dirname)) {
++	    errnum = *(dirname-1)==':'?ERR_FILE_NOT_FOUND:ERR_BAD_FILETYPE;
++	    *rest = ch;
++	    return 0;
++	}
++	*rest = ch;
++
++	filemax = cmft->attr_size;
++	return 1;
++    }
++
++    if(depth >= (MAX_DIR_DEPTH-1)) {
++	errnum = ERR_FSYS_CORRUPT;
++	return 0;
++    }
++
++    /* continue with the file/directory name interpretation */
++
++    while (*dirname == '/')
++	dirname++;
++
++    for (rest = dirname; (ch = *rest) && !isspace (ch) && ch != '/' && ch != ':'; rest++);
++
++    *rest = 0;
++
++    if (!search_attribute(cmft, at_index_root, "$I30"))
++    {
++	errnum = ERR_BAD_FILETYPE;
++	return 0;
++    }
++
++    read_attribute(cmft, 0, fnbuf, 16, 0);
++    my_index_record_size = *(__u32 *)(fnbuf+8);
++
++    if(my_index_record_size > MAX_INDEX_RECORD_SIZE) {
++	errnum = ERR_FSYS_CORRUPT;
++	return 0;
++    }
++
++#ifdef DEBUG_NTFS
++    printf("index_record_size=%x\n", my_index_record_size);
++#endif
++
++    if(cmft->attr_size > MAX_INDEX_RECORD_SIZE) {
++	errnum = ERR_FSYS_CORRUPT;
++	return 0;
++    }
++    read_attribute(cmft, 0, index_data, cmft->attr_size, 0);
++    index_end = index_data + cmft->attr_size;
++    index_entry = index_data + 0x20;
++    record_offset = -1;
++
++#ifndef STAGE1_5
++    if (print_possibilities && ch != '/' && ch != ':' && !*dirname)
++    {
++	print_possibilities = -print_possibilities;
++	/* fake '.' for empty directory */
++	print_a_completion (".");
++    }
++#endif
++
++    if (search_attribute(cmft, at_bitmap, "$I30")) {
++	if(cmft->attr_size > MAX_INDEX_BITMAP_SIZE) {
++	    errnum = ERR_FSYS_CORRUPT;
++	    return 0;
++	}
++
++	read_attribute(cmft, 0, bitmap_data, cmft->attr_size, 0);
++
++	if (search_attribute(cmft, at_index_allocation, "$I30")==0) {
++	    errnum = ERR_FSYS_CORRUPT;
++	    return 0;
++	}
++
++	for(record_offset = 0; record_offset*my_index_record_size<cmft->attr_size; record_offset++){
++	    int bit = 1 << (record_offset&3);
++	    int byte = record_offset>>3;
++#ifdef DEBUG_NTFS
++	    printf("record_offset=%x\n", record_offset);
++#endif
++	    if((bitmap_data[byte]&bit))
++		break;
++	}
++
++	if(record_offset*my_index_record_size>=cmft->attr_size) record_offset = -1;
++    }
++
++    do
++    {
++	entry = index_entry; index_entry += *(__u16 *)(entry+8);
++	if(entry+0x50>=index_entry||entry>=index_end||
++	   index_entry>=index_end||(entry[0x12]&2)){
++	    if(record_offset < 0 ||
++	       !read_attribute(cmft, record_offset*my_index_record_size, index_data, my_index_record_size, 0)){
++		if (!errnum)
++		{
++		    if (print_possibilities < 0)
++		    {
++#if 0
++			putchar ('\n');
++#endif
++			return 1;
++		    }
++
++		    errnum = ERR_FILE_NOT_FOUND;
++		    *rest = ch;
++		}
++
++		return 0;
++	    }
++	    if(!fixup_record( index_data, "INDX", my_index_record_size))
++	    {
++#ifdef DEBUG_NTFS
++		printf("index error\n");
++#endif
++		errnum = ERR_FSYS_CORRUPT;
++		return 0;
++	    }
++	    entry = index_data + 0x18 + *(__u16 *)(index_data+0x18);
++	    index_entry = entry + *(__u16 *)(entry+8);
++	    index_end = index_data + my_index_record_size - 0x52;
++	    for(record_offset++; record_offset*my_index_record_size<cmft->attr_size; record_offset++){
++		int bit = 1 << (record_offset&3);
++		int byte = record_offset>>3;
++		if((bitmap_data[byte]&bit)) break;
++	    }
++	    if(record_offset*my_index_record_size>=cmft->attr_size) record_offset = -1;
++#ifdef DEBUG_NTFS
++	    printf("record_offset=%x\n", record_offset);
++#endif
++	}
++	flag = entry[0x51];
++	path_ino[depth+1] = *(__u32 *)entry;
++	if(path_ino[depth+1] < 16)
++	    continue;
++	namelen = entry[0x50];
++	//if(index_data[0x48]&2) printf("hidden file\n");
++#ifndef STAGE1_5
++	/* skip short file name */
++	if( flag == 2 && print_possibilities && ch != '/' && ch != ':' )
++	    continue;
++#endif
++
++	for( i = 0, entry+=0x52; i < namelen; i++, entry+=2 )
++	{
++	    int c = *(__u16 *)entry;
++	    if(c==' '||c>=0x100)
++		fnbuf[i] = '_';
++	    else
++		fnbuf[i] = c;
++	}
++	fnbuf[namelen] = 0;
++#ifdef DEBUG_NTFS
++	printf("FLAG: %d  NAME: %s  inum=%d\n", flag,fnbuf,path_ino[depth+1]);
++#endif
++
++	//uncntrl(fnbuf);
++
++	chk_sfn = nsubstring(dirname,fnbuf);
++#ifndef STAGE1_5
++	if (print_possibilities && ch != '/' && ch != ':'
++	    && (!*dirname || chk_sfn <= 0))
++	{
++	    if (print_possibilities > 0)
++		print_possibilities = -print_possibilities;
++	    print_a_completion (fnbuf);
++	}
++#endif /* STAGE1_5 */
++    }
++    while (chk_sfn != 0 ||
++	   (print_possibilities && ch != '/' && ch != ':'));
++
++    *(dirname = rest) = ch;
++
++    depth++;
++
++    /* go back to main loop at top of function */
++    goto loop;
++}
++
++#endif /* FSYS_NTFS */
+diff -Nuarp grub-0.97/stage2/shared.h grub-0.97+/stage2/shared.h
+--- grub-0.97/stage2/shared.h	2009-12-30 14:53:52.000000000 +0900
++++ grub-0.97+/stage2/shared.h	2009-12-30 14:53:00.000000000 +0900
+@@ -215,6 +215,7 @@ extern void *grub_scratch_mem;
+ #define STAGE2_ID_XFS_STAGE1_5		8
+ #define STAGE2_ID_ISO9660_STAGE1_5	9
+ #define STAGE2_ID_UFS2_STAGE1_5		10
++#define STAGE2_ID_NTFS_STAGE1_5		11
+
+ #ifndef STAGE1_5
+ # define STAGE2_ID	STAGE2_ID_STAGE2
+@@ -239,6 +240,8 @@ extern void *grub_scratch_mem;
+ #  define STAGE2_ID	STAGE2_ID_ISO9660_STAGE1_5
+ # elif defined(FSYS_UFS2)
+ #  define STAGE2_ID	STAGE2_ID_UFS2_STAGE1_5
++# elif defined(FSYS_NTFS)
++#  define STAGE2_ID	STAGE2_ID_NTFS_STAGE1_5
+ # else
+ #  error "unknown Stage 2"
+ # endif
+diff -Nuarp grub-0.97/win32/INSTALL.txt grub-0.97+/win32/INSTALL.txt
+--- grub-0.97/win32/INSTALL.txt	1970-01-01 09:00:00.000000000 +0900
++++ grub-0.97+/win32/INSTALL.txt	2009-12-30 14:53:00.000000000 +0900
+@@ -0,0 +1,44 @@
++INSTALL:
++--------
++
++	you need to compile these files under CYGWIN
++	get GRUB, for example in the directory /usr/local/src/grub-0.97
++	install these files in grub-0.97/win32
++	run "make" in the win32 directory
++
++
++Usage:
++------
++
++1) get a compiled stage1 and stage2 image and put these in C:\boot
++   for example compiled on a linux machine
++
++2) add the following line to the file C:\boot.ini
++
++   C:\boot\stage1="GRUB"
++
++   you may need to do
++
++	   ATTRIB -R -H -S C:\boot.ini
++
++   to make the file visible and writable and
++
++	   ATTRIB +R +H +S C:\boot.ini
++
++   to revert the attributes of the file
++
++3) run w32grub
++   This will update the embedded blocklists in the files stage1 and stage2
++
++   You should rerun this utility after moving/changing the files stage1 or stage2
++   and after running tools like defragmentation
++
++   w32grub -d device -1 stage1 -2 stage2 -m menu
++       -d (hd0,0)      : partition where the files are
++       -1 C:/boot/stage1 : boot sector
++       -2 C:/boot/stage2 : secondary boot loader
++       -m /boot/grub/menu.lst : grub boot menu
++
++       device must be a GRUB partition identifier
++       stage1 and stage2 must be fullpaths(including drive letter) to win32 file names
++
+diff -Nuarp grub-0.97/win32/Makefile grub-0.97+/win32/Makefile
+--- grub-0.97/win32/Makefile	1970-01-01 09:00:00.000000000 +0900
++++ grub-0.97+/win32/Makefile	2009-12-30 14:53:00.000000000 +0900
+@@ -0,0 +1,17 @@
++CFLAGS = -I. -I../stage1 -mno-cygwin
++LDFLAGS = -s -mno-cygwin
++
++all: w32grub.exe
++
++%.o:%.c
++	$(CC) $(CFLAGS) -c $^ -o $@
++
++w32grub.exe: install.o stages.o win32.o \
++		fat_blocklist.o ntfs_blocklist.o blocklist.o
++	$(CC) $(LDFLAGS) $^ -o $@
++
++
++clean:
++	rm -f w32grub.exe *~ *.o *.stackdump
++
++
+diff -Nuarp grub-0.97/win32/README.txt grub-0.97+/win32/README.txt
+--- grub-0.97/win32/README.txt	1970-01-01 09:00:00.000000000 +0900
++++ grub-0.97+/win32/README.txt	2009-12-30 14:53:00.000000000 +0900
+@@ -0,0 +1,24 @@
++ntfsinstall
++-----------
++
++Purpose:  allow GRUB to be booted from NT/XP
++-------
++
++		This tool modifies the GRUB stage1 and stage2 image files
++		located on an NTFS volume, to make them bootable by NTLDR.
++
++Author:
++-------
++    lode_leroy@hotmail.com
++
++Acknowledgements:
++-----------------
++	 * Samuel Leo for writing fsys_ntfs.c
++
++Copyright:
++----------
++	GPL
++
++
++
++
+diff -Nuarp grub-0.97/win32/blocklist.c grub-0.97+/win32/blocklist.c
+--- grub-0.97/win32/blocklist.c	1970-01-01 09:00:00.000000000 +0900
++++ grub-0.97+/win32/blocklist.c	2009-12-30 14:53:00.000000000 +0900
+@@ -0,0 +1,314 @@
++//#define FSYS_NTFS
++//#define DEBUG_NTFS 1
++#define WITHOUT_LIBC_STUBS 1
++
++//#define STAGE2
++#define GRUB_UTIL
++#include "../stage2/shared.h"
++
++//#include "../stage2/fsys_ntfs.c"
++
++#include "win32.h"
++
++/* these are needed to link the fsys_ntfs.c file */
++void print_a_completion(char* p) {
++}
++
++#ifdef FSYS_FAT
++int
++substring (const char *s1, const char *s2)
++{
++  while (*s1 == *s2)
++    {
++      /* The strings match exactly. */
++      if (! *(s1++))
++	return 0;
++      s2 ++;
++    }
++
++  /* S1 is a substring of S2. */
++  if (*s1 == 0)
++    return -1;
++
++  /* S1 isn't a substring. */
++  return 1;
++}
++#endif
++
++int fd;
++int filepos;
++int filemax = 1000000;
++unsigned long current_drive;
++int current_slice;
++int print_possibilities = 0;
++grub_error_t errnum;
++
++void (*disk_read_hook) (int, int, int) = NULL;
++void (*disk_read_func) (int, int, int) = NULL;
++
++
++#include <stdio.h>
++
++#define bpb_sector_offset 0x18
++#define bpb_head_offset   0x1A
++#define bpb_hidden_offset 0x1C
++#define bpb_sig_offset    0x42
++
++
++int
++grub_seek (int offset)
++{
++  if (offset > filemax || offset < 0)
++    return -1;
++
++  filepos = offset;
++  return offset;
++}
++
++int devread(int sector, int byte_offset, int byte_len, char* buf) {
++  ntfs_s64 offset;
++  offset = ((ntfs_s64)sector) * SECTOR_SIZE + byte_offset;
++  if (fd < 0) return -1;
++#if 0
++  offset = win32_lseek(fd, offset, SEEK_SET);
++  if (offset == -1) {
++	printf("lseek failed?\n");
++  }
++#endif
++  int rvl = 0;
++  if (buf) {
++#if 0
++	printf("devread %ld:%ld:%ld\n", sector, byte_offset, byte_len);
++	rvl = win32_read(fd, buf, byte_len);
++#else
++	//printf("devread %ld:%ld:%ld\n", sector, byte_offset, byte_len);
++	rvl = win32_readsector(fd, buf, sector, byte_offset, byte_len);
++#endif
++  }
++  if (disk_read_hook && disk_read_func) {
++	int v;
++	disk_read_hook(sector, byte_offset, byte_len);
++#ifdef DEBUG_NTFS
++	printf("stage2 version %d.%d\n",
++		buf[SECTOR_SIZE + STAGE2_VER_MAJ_OFFS],
++		buf[SECTOR_SIZE + STAGE2_VER_MAJ_OFFS + 1]);
++#endif
++  }
++  //filepos = win32_filepos(fd);
++#if 0
++  if (sector == 0) {
++	printf("BPB info: hidden sector %ld, sector per track %d, heads %d, id %x\n",
++		*(long *)&buf[bpb_hidden_offset],
++		*(short *)&buf[bpb_sector_offset],
++		*(short *)&buf[bpb_head_offset],
++		(int)*(char *)&buf[bpb_sig_offset]);
++  }
++#endif
++  return rvl;
++}
++
++#include <windows.h>
++
++char* grub_scratch_mem;
++char* dummy;
++char global_blocklist[1024] = "";
++char* ptr_blocklist = global_blocklist;
++unsigned long sector_offset = 0;
++int last_sector = -1;
++int sector_count = 0;
++
++static void print_blocklist()
++{
++  if (ptr_blocklist != global_blocklist) {
++	*ptr_blocklist++=',';
++  }
++  //printf ("[%d,%d,%d]\n", sector_offset, last_sector, sector_count);
++  ptr_blocklist += sprintf(ptr_blocklist, "%d+%d",
++			sector_offset + last_sector, sector_count);
++}
++
++/* Print which sector is read when loading a file.  */
++static void
++disk_read_print_func (int sector, int offset, int length)
++{
++  int cnt = length/SECTOR_SIZE + (length%SECTOR_SIZE ? 1 : 0);
++
++  //printf ("[%d,%d,%d]\n", sector, offset, length);
++  if (last_sector == -1) {
++	last_sector = sector;
++	sector_count = cnt;
++  } else if (last_sector + sector_count != sector) {
++    //printf ("sector group [%d,%d]\n", last_sector, sector_count);
++    print_blocklist();
++	last_sector = sector;
++	sector_count = cnt;
++  } else {
++	sector_count += cnt;
++  }
++#if 0
++  if (ptr_blocklist != global_blocklist) {
++	*ptr_blocklist++=',';
++  }
++  ptr_blocklist += sprintf(ptr_blocklist, "%d+%d", sector_offset + sector, length/SECTOR_SIZE + 1);
++#endif
++}
++
++#if 0
++char*
++orig_ntfs_blocklist(char* device, char* path) {
++
++  if (path[1] == ':') { path += 2; };
++
++  grub_scratch_mem = VirtualAlloc(NULL, 0x100000, MEM_COMMIT, PAGE_READWRITE);
++  if (grub_scratch_mem == NULL) {
++	printf("VirtualAlloc failed\n");
++	return NULL;
++  }
++  fd = win32_open(device, 0);
++  filepos = win32_filepos(fd);
++  if (!ntfs_mount() && fat_mount()) {
++	printf("mount failed\n");
++  } else {
++	// some function
++	char writable_path[1024];
++	sprintf(writable_path, path);
++	if (!ntfs_dir(writable_path) && !fat_dir(writable_path)) {
++	  printf("dir failed %s\n", writable_path);
++	} else {
++	  RUNL *runl = &cmft->runl;
++	  char* ptr = global_blocklist;
++	  rewind_run_list(runl);
++	  while (get_next_run(runl)) {
++		printf("sector %d len %d vcn=0x%x ecn=0x%x\n",
++			   runl->cnum*8+63, runl->clen*8, runl->vcn, runl->evcn);
++		if (ptr != global_blocklist) {
++		  *ptr++=',';
++		}
++		ptr += sprintf(ptr, "%d+%d", runl->cnum*8+63, runl->clen*8);
++	  }
++	}
++  }
++  win32_close(fd);
++
++  VirtualFree(grub_scratch_mem, 0, MEM_RELEASE);
++  return global_blocklist;
++}
++#endif
++
++char*
++ntfs_blocklist(char* device, char* path) {
++
++  char device_name[64];
++
++  if (is9xME()) return global_blocklist;
++  strcpy(device_name, device);
++  if (path[1] == ':') {
++	device_name[0] = path[0], device_name[1]=path[1], device_name[2] = '\0';
++	path += 2;
++  }
++
++  grub_scratch_mem = VirtualAlloc(NULL, 0x100000, MEM_COMMIT, PAGE_READWRITE);
++  if (grub_scratch_mem == NULL) {
++	printf("VirtualAlloc(grub_scratch_mem) failed\n");
++	return NULL;
++  }
++
++  dummy = VirtualAlloc(NULL, 0x100000, MEM_COMMIT, PAGE_READWRITE);
++  if (dummy == NULL) {
++  	VirtualFree(grub_scratch_mem, 0, MEM_RELEASE);
++	printf("VirtualAlloc(dummy) failed\n");
++	return NULL;
++  }
++
++  //fd = win32_open(device_name, 0);
++  fd = win32_open(device, 0);
++  sector_offset = win32_bias_sector(fd);
++  //printf("sector offset win32_open %ld\n", sector_offset);
++  filepos = 0;
++  if (!ntfs_mount()) {
++	//printf("NTFS mount failed\n");
++  } else {
++	// some function
++	char writable_path[1024];
++	sprintf(writable_path, path);
++	if (!ntfs_dir(writable_path)) {
++	  printf("dir failed %s, %d\n", writable_path, errnum);
++	} else {
++	  int rcnt;
++	  //printf("filepos %ld\n", filepos);
++	  filepos = 0;
++	  disk_read_hook = disk_read_print_func ;
++	  rcnt = ntfs_read(dummy,0x100000);
++    	  if (last_sector != -1) {
++		//printf ("sector group [%d,%d]\n", last_sector, sector_count);
++		print_blocklist();
++	  }
++	  //printf("return from ntfs_read %d\n", rcnt);
++	  disk_read_hook = NULL;
++	  }
++  }
++  win32_close(fd);
++
++  VirtualFree(grub_scratch_mem, 0, MEM_RELEASE);
++  VirtualFree(dummy, 0, MEM_RELEASE);
++  return global_blocklist;
++}
++
++char*
++fat_blocklist(char* device, char* path) {
++
++  char device_name[64];
++
++  strcpy(device_name, device);
++  if (path[1] == ':') {
++	device_name[0] = path[0], device_name[1]=path[1], device_name[2] = '\0';
++	path += 2;
++  }
++
++  grub_scratch_mem = VirtualAlloc(NULL, 0x100000, MEM_COMMIT, PAGE_READWRITE);
++  if (grub_scratch_mem == NULL) {
++	printf("VirtualAlloc(grub_scratch_mem) failed\n");
++	return NULL;
++  }
++
++  dummy = VirtualAlloc(NULL, 0x100000, MEM_COMMIT, PAGE_READWRITE);
++  if (dummy == NULL) {
++  	VirtualFree(grub_scratch_mem, 0, MEM_RELEASE);
++	printf("VirtualAlloc(dummy) failed\n");
++	return NULL;
++  }
++
++  fd = win32_open(device, 0);
++  //fd = win32_open(device_name, 0);
++  sector_offset = win32_bias_sector(fd);
++  //printf("sector offset win32_open %ld\n", sector_offset);
++  filepos = 0;
++  if (!fat_mount()) {
++	//printf("FAT mount failed\n");
++  } else {
++	// some function
++	char writable_path[1024];
++	sprintf(writable_path, path);
++	filepos = 0;
++	if (!fat_dir(writable_path)) {
++	  printf("dir failed %s, %d\n", writable_path, errnum);
++	} else {
++	  int rcnt;
++	  //printf("filepos %ld\n", filepos);
++	  filepos = 0;
++	  disk_read_hook = disk_read_print_func ;
++	  rcnt = fat_read(dummy,0x100000);
++    	  if (last_sector != -1) {
++		//printf ("sector group [%d,%d]\n", last_sector, sector_count);
++		print_blocklist();
++	  }
++	  //printf("return from ntfs_read %d\n", rcnt);
++	  disk_read_hook = NULL;
++	  }
++  }
++  win32_close(fd);
++
++  VirtualFree(grub_scratch_mem, 0, MEM_RELEASE);
++  VirtualFree(dummy, 0, MEM_RELEASE);
++  return global_blocklist;
++}
+diff -Nuarp grub-0.97/win32/fat_blocklist.c grub-0.97+/win32/fat_blocklist.c
+--- grub-0.97/win32/fat_blocklist.c	1970-01-01 09:00:00.000000000 +0900
++++ grub-0.97+/win32/fat_blocklist.c	2009-12-30 14:53:00.000000000 +0900
+@@ -0,0 +1,175 @@
++#define FSYS_FAT
++#define DEBUG_FAT 1
++#define WITHOUT_LIBC_STUBS 1
++
++#define GRUB_UTIL
++#include "../stage2/shared.h"
++
++#include "../stage2/fsys_fat.c"
++
++int
++substring (const char *s1, const char *s2)
++{
++  while (*s1 == *s2)
++    {
++      /* The strings match exactly. */
++      if (! *(s1++))
++	return 0;
++      s2 ++;
++    }
++
++  /* S1 is a substring of S2. */
++  if (*s1 == 0)
++    return -1;
++
++  /* S1 isn't a substring. */
++  return 1;
++}
++
++
++#if 0
++#include "win32.h"
++
++/* these are needed to link the fsys_ntfs.c file */
++void print_a_completion(char* p) {
++}
++
++int fd;
++int filepos;
++int filemax = 1000000;
++unsigned long current_drive;
++int current_slice;
++int print_possibilities = 0;
++grub_error_t errnum;
++
++void (*disk_read_hook) (int, int, int) = NULL;
++void (*disk_read_func) (int, int, int) = NULL;
++
++
++#include <stdio.h>
++
++int devread(int sector, int byte_offset, int byte_len, char* buf) {
++  ntfs_s64 offset;
++  offset = ((ntfs_s64)sector) * SECTOR_SIZE + byte_offset;
++  if (fd < 0) return -1;
++  offset = win32_lseek(fd, offset, SEEK_SET);
++  if (offset == -1) {
++	printf("lseek failed?\n");
++  }
++  int rvl = 0;
++  if (buf) {
++	rvl = win32_read(fd, buf, byte_len);
++  }
++  if (disk_read_hook && disk_read_func) {
++	int v;
++	disk_read_hook(sector, byte_offset, byte_len);
++#ifdef DEBUG_NTFS
++	printf("stage2 version %d.%d\n",
++		buf[SECTOR_SIZE + STAGE2_VER_MAJ_OFFS],
++		buf[SECTOR_SIZE + STAGE2_VER_MAJ_OFFS + 1]);
++#endif
++  }
++#ifdef FSYS_FAT
++#else
++  filepos = win32_filepos(fd);
++#endif
++  return rvl;
++}
++
++#include <windows.h>
++
++char* grub_scratch_mem;
++char* dummy;
++char global_blocklist[1024] = "";
++char* ptr_blocklist = global_blocklist;
++unsigned long sector_offset = 0;
++int last_sector = -1;
++int sector_count = 0;
++
++static void print_blocklist()
++{
++  if (ptr_blocklist != global_blocklist) {
++	*ptr_blocklist++=',';
++  }
++  ptr_blocklist += sprintf(ptr_blocklist, "%d+%d",
++			sector_offset + last_sector, sector_count);
++}
++
++/* Print which sector is read when loading a file.  */
++static void
++disk_read_print_func (int sector, int offset, int length)
++{
++  int cnt = length/SECTOR_SIZE + (length%SECTOR_SIZE ? 1 : 0);
++
++  printf ("[%d,%d,%d]\n", sector, offset, length);
++  if (last_sector == -1) {
++	last_sector = sector;
++	sector_count = cnt;
++  } else if (last_sector + sector_count != sector) {
++    printf ("sector group [%d,%d]\n", last_sector, sector_count);
++    print_blocklist();
++	last_sector = sector;
++	sector_count = cnt;
++  } else {
++	sector_count += cnt;
++  }
++#if 0
++  if (ptr_blocklist != global_blocklist) {
++	*ptr_blocklist++=',';
++  }
++  ptr_blocklist += sprintf(ptr_blocklist, "%d+%d", sector_offset + sector, length/SECTOR_SIZE + 1);
++#endif
++}
++
++char*
++fat_blocklist(char* device, char* path) {
++
++  if (path[1] == ':') { path += 2; };
++
++  grub_scratch_mem = VirtualAlloc(NULL, 0x100000, MEM_COMMIT, PAGE_READWRITE);
++  if (grub_scratch_mem == NULL) {
++	printf("VirtualAlloc(grub_scratch_mem) failed\n");
++	return NULL;
++  }
++
++  dummy = VirtualAlloc(NULL, 0x100000, MEM_COMMIT, PAGE_READWRITE);
++  if (dummy == NULL) {
++  	VirtualFree(grub_scratch_mem, 0, MEM_RELEASE);
++	printf("VirtualAlloc(dummy) failed\n");
++	return NULL;
++  }
++
++  fd = win32_open(device, 0);
++  sector_offset = win32_bias_sector(fd);
++  printf("sector offset win32_open %ld\n", sector_offset);
++  filepos = 0;
++  if (!fat_mount()) {
++	printf("FAT mount failed\n");
++  } else {
++	// some function
++	char writable_path[1024];
++	sprintf(writable_path, path);
++	filepos = 0;
++	if (!fat_dir(writable_path)) {
++	  printf("dir failed %s, %d\n", writable_path, errnum);
++	} else {
++	  int rcnt;
++	  printf("filepos %ld\n", filepos);
++	  filepos = 0;
++	  disk_read_hook = disk_read_print_func ;
++	  rcnt = fat_read(dummy,0x100000);
++    	  if (last_sector != -1) {
++		printf ("sector group [%d,%d]\n", last_sector, sector_count);
++		print_blocklist();
++	  }
++	  printf("return from ntfs_read %d\n", rcnt);
++	  disk_read_hook = NULL;
++	  }
++  }
++  win32_close(fd);
++
++  VirtualFree(grub_scratch_mem, 0, MEM_RELEASE);
++  VirtualFree(dummy, 0, MEM_RELEASE);
++  return global_blocklist;
++}
++#endif
+diff -Nuarp grub-0.97/win32/install.bat grub-0.97+/win32/install.bat
+--- grub-0.97/win32/install.bat	1970-01-01 09:00:00.000000000 +0900
++++ grub-0.97+/win32/install.bat	2009-12-30 14:53:00.000000000 +0900
+@@ -0,0 +1,20 @@
++ntfsinstall -d '(hd0,0)' -1 c:/tlinux3/stage1 -2 c:/tlinux3/stage2 -m '/tlinux3/menu.lst'
++
++find "Topologilinux" C:\boot.ini
++
++if ERRORLEVEL 1 goto install
++goto skip_boot_ini
++
++:install_boot_ini
++echo "installing in boot.ini"
++pause
++
++
++attrib -r -h -s C:\boot.ini
++copy C:\boot.ini C:\boot_ini.bak
++
++echo C:\tlinux3\stage1="Topologilinux" >> C:\boot.ini
++attrib +r +h +s C:\boot.ini
++
++:skip_boot_ini
++
+diff -Nuarp grub-0.97/win32/install.c grub-0.97+/win32/install.c
+--- grub-0.97/win32/install.c	1970-01-01 09:00:00.000000000 +0900
++++ grub-0.97+/win32/install.c	2009-12-30 14:53:00.000000000 +0900
+@@ -0,0 +1,105 @@
++#include <stdlib.h>
++#include <getopt.h>
++#include <win32.h>
++
++char* ntfs_blocklist(char* device, char* path);
++char* fat_blocklist(char* device, char* path);
++int stage1(char* filename, long sector);
++int stage2(char* filename, char* blocklist, char* menu);
++
++char* opts = "d:1:2:m:i:h";
++char* usage =
++"w32grub -d device -1 stage1 -2 stage2 -m menu\n"
++"       -d (hd0,0)      : partition where the files are\n"
++"       -1 C:/boot/stage1 : boot sector\n"
++"       -2 C:/boot/stage2 : secondary boot loader\n"
++"       -m /boot/grub/menu.lst : grub boot menu\n"
++"       -i A:                  : device to install grub\n";
++
++
++int
++main(int argc, char* argv[]) {
++  char* device = "(hd0,0)";
++  char* image1 = "C:/boot/stage1";
++  char* image2 = "C:/boot/stage2";
++  char* menu = "/boot/grub/menu.lst";
++  char* install_to = "";
++  int fd;
++  int drive, part=-1;
++  int device_given = 0;
++  char stage2_device[16];
++
++  int c;
++  do {
++	c = getopt(argc, argv, opts);
++	switch (c) {
++	case 'd':
++	  device_given = 1;
++	  device = optarg;
++	  break;
++	case '1':
++	  image1 = optarg;
++	  break;
++	case '2':
++	  image2 = optarg;
++	  break;
++	case 'i':
++	  install_to = optarg;
++	  printf("install to %s\n", install_to);
++	  break;
++	case 'm':
++	  menu = optarg;
++	  printf("menu file is %s\n", menu);
++	  break;
++	default:
++	  printf("unknown option '%c'\n", (char)c);
++	case 'h':
++	  printf(usage);
++	  return 0;
++	  break;
++	case -1:
++	  break;
++	}
++  } while (c>0);
++
++  if (!device_given && logical_to_physical(image2, &drive, &part)) {
++	sprintf(stage2_device,"(hd%d,%d)", drive, part);
++	device = stage2_device;
++  }
++
++  char* blocklist = ntfs_blocklist(device, image2);
++  if (blocklist == NULL) {
++	printf("blocklist failed\n");
++	return 0;
++  } else if (strlen(blocklist)==0) {
++    blocklist = fat_blocklist(device, image2);
++    if (blocklist == NULL || strlen(blocklist) == 0) return 0;
++  }
++
++  int sector = 0;
++  if (sscanf(blocklist, "%d", &sector)==0) {
++	printf("cannot parse blocklist\n");
++	sector = 0;
++	return 0;
++  }
++
++  if ( stage1(image1, sector) < 0 ) {
++	printf("configuring stage1 failed\n");
++	return 0;
++  }
++
++  if ((menu != NULL) && (*menu != '(')){
++	char* tmp = malloc(strlen(device) + strlen(menu));
++	sprintf(tmp,"%s%s", device, menu);
++	//sprintf(tmp,"%s%s", "", menu);
++	menu = tmp;
++  }
++
++  if (stage2(image2, blocklist, menu) < 0) {
++	printf("configuring stage2 failed\n");
++	return 0;
++  }
++  if (strlen(install_to)) install(install_to, image1, image2);
++  return 1;
++}
++
+diff -Nuarp grub-0.97/win32/ntfs_blocklist.c grub-0.97+/win32/ntfs_blocklist.c
+--- grub-0.97/win32/ntfs_blocklist.c	1970-01-01 09:00:00.000000000 +0900
++++ grub-0.97+/win32/ntfs_blocklist.c	2009-12-30 14:53:00.000000000 +0900
+@@ -0,0 +1,224 @@
++#define FSYS_NTFS
++//#define DEBUG_NTFS 1
++#define WITHOUT_LIBC_STUBS 1
++
++//#define STAGE2
++#define GRUB_UTIL
++#include "../stage2/shared.h"
++
++#include "../stage2/fsys_ntfs.c"
++
++#if 0
++#include "win32.h"
++
++/* these are needed to link the fsys_ntfs.c file */
++void print_a_completion(char* p) {
++}
++
++#ifdef FSYS_FAT
++int
++substring (const char *s1, const char *s2)
++{
++  while (*s1 == *s2)
++    {
++      /* The strings match exactly. */
++      if (! *(s1++))
++	return 0;
++      s2 ++;
++    }
++
++  /* S1 is a substring of S2. */
++  if (*s1 == 0)
++    return -1;
++
++  /* S1 isn't a substring. */
++  return 1;
++}
++#endif
++
++int fd;
++int filepos;
++int filemax = 1000000;
++unsigned long current_drive;
++int current_slice;
++int print_possibilities = 0;
++grub_error_t errnum;
++
++void (*disk_read_hook) (int, int, int) = NULL;
++void (*disk_read_func) (int, int, int) = NULL;
++
++
++#include <stdio.h>
++
++int devread(int sector, int byte_offset, int byte_len, char* buf) {
++  ntfs_s64 offset;
++  offset = ((ntfs_s64)sector) * SECTOR_SIZE + byte_offset;
++  printf("I am here in devread sector %d, offset %d\n",sector,byte_offset);
++  if (fd < 0) return -1;
++  offset = win32_lseek(fd, offset, SEEK_SET);
++  if (offset == -1) {
++	printf("lseek failed?\n");
++  }
++  int rvl = 0;
++  if (buf) {
++	rvl = win32_read(fd, buf, byte_len);
++  }
++  if (disk_read_hook) {
++	int v;
++	disk_read_hook(sector, byte_offset, byte_len);
++#ifdef DEBUG_NTFS
++	printf("stage2 version %d.%d\n",
++		buf[SECTOR_SIZE + STAGE2_VER_MAJ_OFFS],
++		buf[SECTOR_SIZE + STAGE2_VER_MAJ_OFFS + 1]);
++#endif
++  }
++  filepos = win32_filepos(fd);
++  printf("After devread rvl %d, new filepos %d\n",rvl, filepos);
++  return rvl;
++}
++
++#include <windows.h>
++
++char* grub_scratch_mem;
++char* dummy;
++char global_blocklist[1024] = "";
++char* ptr_blocklist = global_blocklist;
++unsigned long sector_offset = 0;
++int last_sector = -1;
++int sector_count = 0;
++
++static void print_blocklist()
++{
++  if (ptr_blocklist != global_blocklist) {
++	*ptr_blocklist++=',';
++  }
++  ptr_blocklist += sprintf(ptr_blocklist, "%d+%d",
++			sector_offset + last_sector, sector_count);
++}
++
++/* Print which sector is read when loading a file.  */
++static void
++disk_read_print_func (int sector, int offset, int length)
++{
++  int cnt = length/SECTOR_SIZE + (length%SECTOR_SIZE ? 1 : 0);
++
++  printf ("[%d,%d,%d]\n", sector, offset, length);
++  if (last_sector == -1) {
++	last_sector = sector;
++	sector_count = cnt;
++  } else if (last_sector + sector_count != sector) {
++    printf ("sector group [%d,%d]\n", last_sector, sector_count);
++    print_blocklist();
++	last_sector = sector;
++	sector_count = cnt;
++  } else {
++	sector_count += cnt;
++  }
++#if 0
++  if (ptr_blocklist != global_blocklist) {
++	*ptr_blocklist++=',';
++  }
++  ptr_blocklist += sprintf(ptr_blocklist, "%d+%d", sector_offset + sector, length/SECTOR_SIZE + 1);
++#endif
++}
++
++#if 0
++char*
++orig_ntfs_blocklist(char* device, char* path) {
++
++  if (path[1] == ':') { path += 2; };
++
++  grub_scratch_mem = VirtualAlloc(NULL, 0x100000, MEM_COMMIT, PAGE_READWRITE);
++  if (grub_scratch_mem == NULL) {
++	printf("VirtualAlloc failed\n");
++	return NULL;
++  }
++  fd = win32_open(device, 0);
++  filepos = win32_filepos(fd);
++  if (!ntfs_mount()) {
++	printf("NTFS mount failed\n");
++  } else {
++	// some function
++	char writable_path[1024];
++	sprintf(writable_path, path);
++	if (!ntfs_dir(writable_path)) {
++	  printf("dir failed %s\n", writable_path);
++	} else {
++	  RUNL *runl = &cmft->runl;
++	  char* ptr = global_blocklist;
++	  rewind_run_list(runl);
++	  while (get_next_run(runl)) {
++		printf("sector %d len %d vcn=0x%x ecn=0x%x\n",
++			   runl->cnum*8+63, runl->clen*8, runl->vcn, runl->evcn);
++		if (ptr != global_blocklist) {
++		  *ptr++=',';
++		}
++		ptr += sprintf(ptr, "%d+%d", runl->cnum*8+63, runl->clen*8);
++	  }
++	}
++  }
++  win32_close(fd);
++
++  VirtualFree(grub_scratch_mem, 0, MEM_RELEASE);
++  return global_blocklist;
++}
++#endif
++
++char*
++ntfs_blocklist(char* device, char* path) {
++
++  char device_name[64];
++
++  strcpy(device_name, device);
++  if (path[1] == ':') {
++	device_name[0] = path[0], device_name[1]=path[1], device_name[2] = '\0';
++	path += 2;
++  }
++
++  grub_scratch_mem = VirtualAlloc(NULL, 0x100000, MEM_COMMIT, PAGE_READWRITE);
++  if (grub_scratch_mem == NULL) {
++	printf("VirtualAlloc(grub_scratch_mem) failed\n");
++	return NULL;
++  }
++
++  dummy = VirtualAlloc(NULL, 0x100000, MEM_COMMIT, PAGE_READWRITE);
++  if (dummy == NULL) {
++  	VirtualFree(grub_scratch_mem, 0, MEM_RELEASE);
++	printf("VirtualAlloc(dummy) failed\n");
++	return NULL;
++  }
++
++  fd = win32_open(device_name, 0);
++//  fd = win32_open(device, 0);
++  sector_offset = win32_bias_sector(fd);
++  printf("sector offset win32_open %ld\n", sector_offset);
++  filepos = 0;
++  if (!ntfs_mount()) {
++	printf("NTFS mount failed\n");
++  } else {
++	// some function
++	char writable_path[1024];
++	sprintf(writable_path, path);
++	if (!ntfs_dir(writable_path)) {
++	  printf("dir failed %s, %d\n", writable_path, errnum);
++	} else {
++	  int rcnt;
++	  printf("filepos %ld\n", filepos);
++	  filepos = 0;
++	  disk_read_hook = disk_read_print_func ;
++	  rcnt = ntfs_read(dummy,0x100000);
++    	  if (last_sector != -1) {
++		printf ("sector group [%d,%d]\n", last_sector, sector_count);
++		print_blocklist();
++	  }
++	  printf("return from ntfs_read %d\n", rcnt);
++	  disk_read_hook = NULL;
++	  }
++  }
++  win32_close(fd);
++
++  VirtualFree(grub_scratch_mem, 0, MEM_RELEASE);
++  VirtualFree(dummy, 0, MEM_RELEASE);
++  return global_blocklist;
++}
++#endif
+diff -Nuarp grub-0.97/win32/stages.c grub-0.97+/win32/stages.c
+--- grub-0.97/win32/stages.c	1970-01-01 09:00:00.000000000 +0900
++++ grub-0.97+/win32/stages.c	2009-12-30 14:53:00.000000000 +0900
+@@ -0,0 +1,533 @@
++#include <stdio.h>
++#include "stage1.h"
++
++#define SECTOR_SIZE 512
++#define STAGE2_ADDRESS 0x8000
++#define STAGE2_INSTALLPART  0x8
++#define STAGE2_VER_STR_OFFS 0x12
++#define BOOTSEC_BPB_OFFSET		0x3
++#define BOOTSEC_BPB_LENGTH		0x3B
++#define BOOTSEC_SIG_OFFSET		0x1FE
++#define BOOTSEC_SIGNATURE		0xAA55
++
++typedef unsigned char BYTE;
++typedef unsigned short WORD;
++typedef unsigned long LONG;
++
++BYTE stage1_buffer[SECTOR_SIZE];
++BYTE stage2_buffer[SECTOR_SIZE];
++BYTE stage2_buffer2[SECTOR_SIZE];
++LONG stage2_address = STAGE2_ADDRESS;
++
++struct {
++  BYTE* major;
++  BYTE* minor;
++  BYTE* boot_drive;
++  BYTE* force_lba;
++  WORD* stage2_address;
++  LONG* stage2_sector;
++  WORD* stage2_segment;
++} bootparams = {
++  stage1_buffer + STAGE1_VER_MAJ_OFFS,
++  stage1_buffer + STAGE1_VER_MAJ_OFFS+1,
++  stage1_buffer + STAGE1_BOOT_DRIVE,
++  stage1_buffer + STAGE1_FORCE_LBA,
++  (WORD*)(stage1_buffer + STAGE1_STAGE2_ADDRESS),
++  (LONG*)(stage1_buffer + STAGE1_STAGE2_SECTOR),
++  (WORD*)(stage1_buffer + STAGE1_STAGE2_SEGMENT),
++};
++
++void
++dump(BYTE* buffer, int rows, int cols)
++{
++  int pos=0;
++  int i,j;
++  for(i=0; i<rows; i++) {
++	printf("%4.4x   ", i*cols);
++	for(j=0; j<cols; j++) {
++	  printf("%2.2x ", buffer[pos++]);
++	}
++	printf("  ");
++	pos -= cols;
++	for(j=0; j<cols; j++) {
++	  if (isprint(buffer[pos])) {
++		printf("%c", buffer[pos]);
++	  } else {
++		printf(".");
++	  }
++	  pos++;
++	}
++	printf("\n");
++  }
++}
++
++int
++stage1(char* filename, LONG sector)
++{
++  int rvl = 0;
++  int b_drive;
++  int lba;
++
++  printf("stage1(%d)\n", sector);
++  FILE* fp=fopen(filename,"r+b");
++  if (fp == NULL) {
++	perror("open failed");
++	rvl--;
++	return rvl;
++  }
++  fseek(fp,0,SEEK_SET);
++  fread(stage1_buffer,SECTOR_SIZE,1,fp);
++
++  if (*((short *)(stage1_buffer + STAGE1_VER_MAJ_OFFS)) != COMPAT_VERSION
++     || (*((unsigned short *) (stage1_buffer + BOOTSEC_SIG_OFFSET))
++	 != BOOTSEC_SIGNATURE)) {
++	 printf("bad stage1 signature\n");
++	 return 0;
++  }
++
++  if (sector != 0) {
++	*bootparams.stage2_sector = sector;
++	*bootparams.stage2_address = stage2_address;
++
++	fseek(fp,0,SEEK_SET);
++	if (fwrite(stage1_buffer,SECTOR_SIZE,1,fp) < 0) {
++	  rvl--;
++	}
++  }
++
++  //dump(stage1_buffer,32,16);
++  printf(" version=%d.%d\n", *bootparams.major, *bootparams.minor);
++  printf(" boot_drive=%x\n", b_drive=*bootparams.boot_drive);
++  printf(" force_lba=%d\n", lba = *bootparams.force_lba);
++  printf(" stage2_address=0x%x\n", *bootparams.stage2_address);
++  printf(" stage2_sector=%d\n", *bootparams.stage2_sector);
++  printf(" stage2_segment=0x%x\n", *bootparams.stage2_segment);
++
++  fclose(fp);
++  return rvl;
++}
++
++#define GET(x) {ptr-=sizeof(x);memcpy(&x,ptr,sizeof(x));}
++#define PUT(x) {ptr-=sizeof(x);memcpy(ptr,&x,sizeof(x));}
++#define BACK(x) {ptr+=sizeof(x);}
++
++int
++stage2(char* filename, char* blocklist, char* menu) {
++  int rvl = 0;
++  int real_len;
++  int len_written = 0;
++  int src_drive,src_part=-1;
++
++  printf("stage2(%s)\n", blocklist);
++  FILE* fp=fopen(filename,"r+b");
++  if (fp == NULL) {
++	perror("open failed\n");
++	rvl--;
++	return rvl;
++  }
++
++  logical_to_physical(filename,&src_drive,&src_part);
++  fseek(fp, 0, SEEK_SET);
++  fread(stage2_buffer,SECTOR_SIZE,1,fp);
++  fseek(fp, 0, SEEK_END);
++  real_len = ftell(fp);
++#if 0
++  printf("first 8 byte of stage2 %lx/%lx\n",
++			*((unsigned long*)stage2_buffer),
++			*((unsigned long*)stage2_buffer+4));
++#endif
++
++  BYTE* ptr;
++  WORD count;
++  LONG offset;
++  WORD addr;
++
++  if (blocklist) {
++	int numread;
++	ptr = &(stage2_buffer[SECTOR_SIZE]);
++
++	addr = (stage2_address + SECTOR_SIZE) >> 4;
++
++	if (*blocklist=='(') {
++	  blocklist = strchr(blocklist,')');
++	  if (blocklist) {
++		blocklist++;
++	  }
++	}
++	int first = 1;
++	while(blocklist && *blocklist) {
++	  if (sscanf(blocklist, "%d+%hd", &offset, &count)==2) {
++		len_written += count*SECTOR_SIZE;
++		if (first) {
++		  first = 0;
++		  // first sector was already loaded
++		  offset++;
++		  count--;
++		}
++		// printf(" offset=%d, count=%d, addr=0x%x\n", offset, count, addr);
++
++		if (((*(WORD*)(ptr-4)) & 0x8000) != 0) {
++		  printf("IMAGE TOO LARGE! p=0x%x\n",*(WORD*)(ptr-4));
++		  break;
++		}
++
++		if (count != 0) {
++		  if (len_written > real_len) count-= (len_written-real_len)/SECTOR_SIZE;
++		  PUT(addr);
++		  PUT(count);
++		  PUT(offset);
++		}
++		addr += (count*SECTOR_SIZE)>>4;
++
++	  } else {
++		break;
++	  }
++	  blocklist = strchr(blocklist,',');
++	  if (blocklist) {
++		blocklist++;
++	  }
++	}
++	while (((*(WORD*)(ptr)) & 0x8000) == 0) {
++	  count = 0; offset = 0; addr = 0;
++	  PUT(addr);
++	  PUT(count);
++	  PUT(offset);
++	  break;
++	}
++
++	fseek(fp, 0, SEEK_SET);
++#if 0
++	printf("pointer %x %d %x\n",
++		*(unsigned long *)(&stage2_buffer[SECTOR_SIZE -8]),
++		*(unsigned short *)(&stage2_buffer[SECTOR_SIZE -4]),
++		*(unsigned short *)(&stage2_buffer[SECTOR_SIZE -2]));
++	printf("pointer %x %d %x\n",
++		*(unsigned long *)(&stage2_buffer[SECTOR_SIZE -16]),
++		*(unsigned short *)(&stage2_buffer[SECTOR_SIZE -12]),
++		*(unsigned short *)(&stage2_buffer[SECTOR_SIZE -10]));
++#endif
++	if (! fwrite(stage2_buffer,SECTOR_SIZE,1,fp)) {
++	  rvl--;
++	}
++  }
++
++  if (menu) {
++	  fseek(fp, SECTOR_SIZE, SEEK_SET);
++	  fread(stage2_buffer2,SECTOR_SIZE,1,fp);
++	  if (menu[0] != '(') {
++	  	if (src_part != -1) {
++       		*((long *) (stage2_buffer2 + STAGE2_INSTALLPART))
++				= (src_part << 16)+0xffff;
++	  	} else {
++       		*((long *) (stage2_buffer2 + STAGE2_INSTALLPART))
++				= 0xffff;
++	  	}
++	  }
++	  ptr = &(stage2_buffer2[STAGE2_VER_STR_OFFS]);
++	  while (*ptr++);
++	  memcpy(ptr,menu,strlen(menu));
++	  ptr+=strlen(menu);
++	  *ptr='\0';
++	  fseek(fp, SECTOR_SIZE, SEEK_SET);
++	  fwrite(stage2_buffer2,SECTOR_SIZE,1,fp);
++	  printf("menu %s\n", menu);
++  }
++#if 0
++  fseek(fp, 0, SEEK_SET);
++  fread(stage2_buffer,SECTOR_SIZE,1,fp);
++  ptr = &(stage2_buffer[SECTOR_SIZE]);
++
++  do {
++	GET(addr);
++	GET(count);
++	GET(offset);
++	if ((count & 0x8000) != 0) {
++	  break;
++	}
++	if (addr == 0) {
++	  break;
++	}
++	printf(" %d sectors to load from %d at 0x%x\n", count, offset, addr);
++  } while (addr != 0);
++#endif
++
++  //dump(stage2_buffer, 32, 16);
++
++  return rvl;
++}
++
++char file_buf[32*1024];
++int verify(char *device, char *stage1, char *stage2)
++{
++	FILE *fp;
++	unsigned char stage1_buffer[512];
++	unsigned char stage2_buffer[512];
++	unsigned char buffer1[512];
++	unsigned char buffer2[512];
++	unsigned int first_sector;
++	int fd;
++	int sector_offset;
++	int drive, part;
++	int src_drive, src_part;
++	int numparams;
++	char device_name[16];
++	int stage2_len;
++	int i=0;
++	int match = 0;
++	int boot_drive;
++	int cnt;
++	int test_me_write = 0;
++
++	if (sscanf(device,"(fd%d)", &drive) > 0) return 1;
++	if (device[1]==':' && toupper(device[0]) < 'C') return 1;
++
++	if (!is9xME()) {
++    	numparams = sscanf(device,"(hd%d,%d)",&drive,&part);
++		if (numparams == 0 &&
++			!logical_to_physical(device, &drive, &part)) return 0;
++		if (!logical_to_physical(stage2, &src_drive, &src_part)) return 0;
++	} else {
++    	numparams = sscanf(device,"(hd%d,%d)",&drive,&part);
++		if (numparams) {
++		} else if (toupper(device[0]) != toupper(stage2[0]) ||
++					toupper(device[0]) != 'C') {
++				printf("%c %c %c\n",
++						toupper(device[0]),
++						toupper(stage2[0]));
++				return 0;
++				}
++	}
++
++	if (device[0] != '(') sprintf(device_name,"(hd%d,%d)",drive,part);
++	else strcpy(device_name,device);
++
++	if ((fp = fopen(stage1,"rb"))== NULL) return 0;
++  	fseek(fp, 0, SEEK_SET);
++	if (!(cnt = fread(stage1_buffer,512,1, fp))) {
++		printf("stage1 file is bad %d\n",cnt);
++		fclose(fp); return 0;
++	}
++	fclose(fp);
++	if (*((short *)(stage1_buffer + STAGE1_VER_MAJ_OFFS)) != COMPAT_VERSION
++      	|| (*((unsigned short *) (stage1_buffer + BOOTSEC_SIG_OFFSET))
++	  	!= BOOTSEC_SIGNATURE)) {
++		printf("bad stage1 signature\n");
++		return 0;
++		}
++	first_sector = *(unsigned long *)(stage1_buffer+STAGE1_STAGE2_SECTOR);
++	boot_drive = *(stage1_buffer + STAGE1_BOOT_DRIVE);
++	if (boot_drive == 0xff &&
++		src_drive != drive) {
++		printf("installed drive != stage2\n");
++		return 0;
++		}
++	if (boot_drive != 0xff && (boot_drive - 0x80) != src_drive) {
++		printf("stage1 boot drive setting != stage2\n");
++		return 0;
++		}
++	if ((fp = fopen(stage2,"rb"))== NULL) {
++		printf("stage2 file bad\n");
++		return 0;
++		}
++	if ((fd = win32_open(device_name,test_me_write & is9xME())) <= 0) {
++		printf("installed device non-verifable\n");
++		fclose(fp);
++		return 0;
++		}
++	sector_offset = win32_bias_sector(fd);
++  	fseek(fp, 0, SEEK_END);
++  	stage2_len = ftell(fp);
++  	fseek(fp, 0, SEEK_SET);
++	if (win32_readsector(fd,stage2_buffer,first_sector-sector_offset,0,512) &&
++  		fread(buffer1,512,1,fp) > 0 && memcmp(stage2_buffer,buffer1,512) == 0) {
++		int i = 1;
++		int j = 0;
++		long *ps = (long *)&stage2_buffer[512-8];
++		short *pc = (short *)&stage2_buffer[512-8+4];
++		int c_sector = *ps;
++		int cnt = *pc;
++
++		while (i < (stage2_len - 512)/512 + ((stage2_len - 512)%512 ? 1 : 0)) {
++  			fseek(fp, 512*i, SEEK_SET);
++			fread(buffer1,512,1,fp);
++			win32_readsector(fd,buffer2,c_sector-sector_offset,0,512);
++			if (memcmp(buffer1,buffer2,512) != 0) break;
++			else if (is9xME() && test_me_write) {
++				win32_writesector(fd,buffer2,c_sector-sector_offset,0,512);
++			}
++			i++,cnt--,c_sector++;
++			if (cnt == 0) {
++				ps-=2; pc-=4;
++				cnt = *pc, c_sector = *ps;
++			}
++			if (cnt == 0) break;
++		}
++		if (stage2_len - i*512 < 512) match = 1;
++		else {
++			printf("verification failed at sector %d\n", i);
++		}
++	}
++	fclose(fp);
++	win32_close(fd);
++	return match;
++}
++
++int install(char *device, char *stage1, char *stage2)
++{
++  int floppy = 0;
++  int numparams;
++  int drive = 0;
++  int part = 0;
++  int fd;
++  char device_name[8];
++  int open_mode = 1;
++  int harddisk = 0;
++
++  if (!verify(device,stage1,stage2)) {
++	printf("broken stage1/stage2 file in order to install to %s\n", device);
++	return -1;
++	}
++
++  if (device[1] == ':') {
++	drive = toupper(device[0]) - 'A'+ 1;
++	floppy = drive < 3;
++	device_name[0] = device[0], device_name[1] = ':', device_name[2] = '\0';
++  } else {
++    numparams = sscanf(device,"(hd%d,%d)",&drive,&part);
++    if (numparams == 0) {
++	  numparams = sscanf(device,"(fd%d)",&drive);
++	  if (numparams != 0) {
++		floppy = 1, drive+=1;
++	    device_name[0] = 'A' + drive - 1;
++	    device_name[1] = ':';
++	    device_name[2] = '\0';
++ 	    }
++	}
++    else {
++	  if (numparams == 1) {
++		strcpy(device_name,device);
++		harddisk = 1;
++	  } else {
++	    device_name[0] = 'C' + part;
++	    device_name[1] = ':';
++	    device_name[2] = '\0';
++	  }
++    }
++  }
++
++  if (!is9xME() && !floppy && open_mode == 1) {
++	printf("In order to boot GRUB/Linux on NT/W2K/XP\n");
++	printf("Please add: %s=\"GRUB/Linux\" to c:\\boot.ini\n", stage1);
++	return 0;
++  }
++
++  if((fd = win32_open(device_name,open_mode)) > 0) {
++    FILE* fp;
++	char  saved_bootsector[128];
++    char  buf[512];
++    char  stage1_buffer[512];
++	char  *pslash;
++	int	  was_grub = 0;
++	int	  raw_floppy = 0;
++
++    if (win32_readsector(fd,buf,0,0, 512) > 0) {
++  		/* Check for the version and the signature of Stage 1.  */
++		if (*((short *)(buf + STAGE1_VER_MAJ_OFFS)) != COMPAT_VERSION
++      			|| (*((unsigned short *) (buf + BOOTSEC_SIG_OFFSET))
++	  			!= BOOTSEC_SIGNATURE)) {
++		} else {
++			was_grub = 1;
++			printf("Boot sector on %s was GRUB\n", device_name);
++			}
++
++    	if (fp=fopen(stage1,"r+b")) {
++
++  			fseek(fp,0,SEEK_SET);
++  			fread(stage1_buffer,512,1,fp);
++  			/* Copy the possible DOS BPB, 59 bytes at byte offset 3.  */
++  			memmove (stage1_buffer + BOOTSEC_BPB_OFFSET,
++					 buf + BOOTSEC_BPB_OFFSET,
++					BOOTSEC_BPB_LENGTH);
++
++			if (!floppy) {
++  				/* copy the possible MBR/extended part table.  */
++    			memmove (stage1_buffer + STAGE1_WINDOWS_NT_MAGIC,
++		  				buf + STAGE1_WINDOWS_NT_MAGIC,
++		  				STAGE1_PARTEND - STAGE1_WINDOWS_NT_MAGIC);
++			} else {
++				if ((unsigned char)stage1_buffer[STAGE1_BOOT_DRIVE] == 0xff) {
++					raw_floppy = 1;
++					*(unsigned long *)&stage1_buffer[STAGE1_STAGE2_SECTOR] = 1;
++					}
++			}
++
++  			/* Check for the version and the signature of Stage 1.  */
++  			if (*((short *)(stage1_buffer + STAGE1_VER_MAJ_OFFS)) != COMPAT_VERSION
++      			|| (*((unsigned short *) (stage1_buffer + BOOTSEC_SIG_OFFSET))
++	  			!= BOOTSEC_SIGNATURE))
++    		{
++      			goto fail;
++    		}
++			if (!floppy && !was_grub) { //save the old boot record/MBR
++				FILE *pold;
++				sprintf(saved_bootsector,"%c:/boot/%c_boot.old",
++						device_name[0],device_name[0]);
++				pold = fopen(saved_bootsector,"wb+");
++				if (pold) fwrite(buf,512,1,pold), fclose(pold);
++				else {
++					sprintf(saved_bootsector,"%c:/%c_boot.old",
++							device_name[0],device_name[0]);
++					pold = fopen(saved_bootsector,"wb+");
++					if (pold) fwrite(buf,512,1,pold), fclose(pold);
++				}
++			}
++    		if (win32_writesector(fd,stage1_buffer,0,0, 512) > 0) {
++				printf("Stage1 written to %s successfully\n",device_name);
++			} else goto fail;
++			if (floppy) {
++				FILE *fp2 = fopen(stage2,"rb");
++				int real_len;
++				int written = 0;
++				int i = 1;
++				int stage2_sectors;
++				if (fp2) {
++  					fseek(fp2, 0, SEEK_END);
++  					real_len = ftell(fp2);
++					stage2_sectors = (real_len/512) + (real_len%512 ? 1:0);
++  					fseek(fp2, 0, SEEK_SET);
++					while (written < real_len) {
++						int to_read = real_len - written;
++						if (to_read > sizeof(file_buf)) to_read = sizeof(file_buf);
++
++						if (fread(file_buf,to_read,1,fp2) > 0) {
++							if (i==1 && raw_floppy) {
++								*(unsigned long *)&file_buf[504] = 2;
++								*(unsigned short *)&file_buf[504+4] = stage2_sectors-1;
++								*(unsigned short *)&file_buf[504-4] = 0;
++							}
++							if (win32_writesector(fd,file_buf,i,0,to_read) > 0) {
++								printf("Writing stage2 sector %d - %d\n", i, i+to_read/512-1+(to_read%512 ? 1: 0));
++							} else {
++								printf("Writing stage2 sector %d - %d, failed \n", i, i+to_read/512+(to_read%512 ? 1: 0));
++								break;
++							}
++						} else {
++							break;
++						}
++						written+=sizeof(file_buf);
++						i+=sizeof(file_buf)/512;
++					}
++					if (written > real_len)
++						printf("Stage2 written to %s successfully\n",
++							device_name);
++					fclose(fp2);
++				}
++			}
++		}
++fail:
++			fclose(fp);
++	}
++    win32_close(fd);
++  }
++}
++
+diff -Nuarp grub-0.97/win32/win32.c grub-0.97+/win32/win32.c
+--- grub-0.97/win32/win32.c	1970-01-01 09:00:00.000000000 +0900
++++ grub-0.97+/win32/win32.c	2009-12-30 14:53:00.000000000 +0900
+@@ -0,0 +1,1070 @@
++/*
++ * win32.c: a stdio-like disk I/O implementation for low-level disk access on Win32
++ *          can access an NTFS-volume while mounted!
++ */
++
++#include <windows.h>
++#include <winioctl.h>
++
++#include <stdio.h>
++#include <ctype.h>
++
++#include "win32.h"
++//#define DEBUG
++#define FORCE_ALIGNED_READ
++
++typedef struct win32_fd {
++  HANDLE handle;
++  LARGE_INTEGER part_start;
++  LARGE_INTEGER part_end;
++  LARGE_INTEGER current_pos;
++  int logical;
++  int drive;
++  int mode;
++} win32_fd;
++
++win32_fd win32_fds[64] = {
++  {(HANDLE)42}, // fd==0 breaks some code in attr.c, so skip it
++  {0}};
++
++#ifdef DEBUG
++static __inline__ void Dprintf(const char *fmt, ...)
++{
++	va_list ap;
++
++	va_start(ap, fmt);
++	//vfprintf(stdout, fmt, ap);
++	vprintf(fmt, ap);
++	va_end(ap);
++}
++#else
++static void Dprintf(const char *fmt, ...) {}
++#endif
++
++#define perror(msg) win32_perror(__FILE__,__LINE__,__FUNCTION__,msg)
++
++int win32_perror(char* file, int line, char* func, char* msg) {
++	char buffer[1024] = "";
++	DWORD err = GetLastError();
++	if (FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, NULL, err, 0, buffer, sizeof(buffer), NULL) <= 0) {
++	  sprintf(buffer, "HRESULT 0x%lx", err);
++	}
++	//fprintf(stderr, "%s(%d):%s\t%s %s\n", file, line, func, buffer, msg);
++	printf("%s(%d):%s\t%s %s\n", file, line, func, buffer, msg);
++	return 0;
++}
++
++int logical_to_physical(char *name, int *drive, int *part)
++{
++	PARTITION_INFORMATION partition;
++	DWORD numread=sizeof(partition);
++	char buffer[10240];
++	int  found = 0;
++	char filename[256];
++
++
++	if (*name == '(') {
++		int num;
++		num = sscanf(name,"(hd%d,%d)", drive,part);
++		if (num == 1) *part = -1;
++		else if (num == 0) return 0;
++		return 1;
++	}
++
++	sprintf(filename, "\\\\.\\%.2s", name);
++	HANDLE handle = CreateFile(filename,
++							   GENERIC_READ, // no access, just get info
++							   FILE_SHARE_READ|FILE_SHARE_WRITE,
++							   NULL,
++							   OPEN_EXISTING,
++							   FILE_ATTRIBUTE_SYSTEM,
++							   NULL);
++	if (handle == INVALID_HANDLE_VALUE) {
++	  char msg[1024];
++	  sprintf(msg,"CreateFile(%s) failed", name);
++	  perror(msg);
++	  return found;
++	}
++
++
++	BOOL rvl = DeviceIoControl(handle,
++							 IOCTL_DISK_GET_PARTITION_INFO,
++							 NULL, 0,
++							 &partition, sizeof(partition),
++							 &numread,
++							 NULL);
++	if (!rvl) {
++	  perror("ioctl failed");
++	  CloseHandle(handle);
++	  }
++	else {
++	  int  i = 0;
++
++	  CloseHandle(handle); // close the logical one
++
++	  do {
++	  	sprintf(filename, "\\\\.\\PhysicalDrive%d", i++);
++		HANDLE handle = CreateFile(filename,
++						   	   GENERIC_READ,
++							   FILE_SHARE_READ|FILE_SHARE_WRITE,
++							   NULL,
++							   OPEN_EXISTING,
++							   FILE_ATTRIBUTE_SYSTEM,
++							   NULL);
++
++		if (handle != INVALID_HANDLE_VALUE) {
++	  		DWORD numread=sizeof(buffer);
++	  		DRIVE_LAYOUT_INFORMATION* drive_layout;
++			int j=0;
++
++	  		BOOL rvl = DeviceIoControl(handle,
++								 IOCTL_DISK_GET_DRIVE_LAYOUT,
++								 NULL, 0,
++								 &buffer, sizeof(buffer),
++								 &numread,
++								 NULL);
++	  		if (!rvl) {
++	  			perror("ioctl failed");
++	  			CloseHandle(handle);
++				break;
++			}
++			drive_layout = (DRIVE_LAYOUT_INFORMATION*)buffer;
++			for (j=0; j < drive_layout->PartitionCount; j++) {
++				if (drive_layout->PartitionEntry[j].StartingOffset.QuadPart ==
++					partition.StartingOffset.QuadPart &&
++					drive_layout->PartitionEntry[j].PartitionLength.QuadPart ==
++					partition.PartitionLength.QuadPart) {
++					*drive = i-1;
++					*part = j;
++					found = 1;
++					break;
++				}
++
++			}
++		    CloseHandle(handle);
++		} else{
++		  Dprintf("Can't open %s", filename);
++		}
++	  } while (!found);
++	}
++	if (found) Dprintf("file/device %s is on (hd%d,%d)\n", name, *drive,*part);
++	return found;
++}
++
++/*
++ * open a file
++ * if name is in format "(hd[0-9],[0-9])" then open a partition
++ * if name is in format "(hd[0-9])" then open a volume
++ * else open a file
++ */
++
++int win32_open(const char* name, int mode) {
++  int drive = 0;
++  int part = 0;
++  int fd = 1;
++  int logical_drive = 0;
++  int floppy = 0;
++
++  // paranoia check
++  while (win32_fds[fd].handle != 0) {
++	fd++;
++	if (fd>sizeof(win32_fds)/sizeof(win32_fds[0])) {
++	  perror("too many open files");
++	  return -1;
++	}
++  }
++
++  win32_fds[fd].logical = 0;
++  win32_fds[fd].mode = mode;
++  win32_fds[fd].drive = 0;
++  // parse name
++  int numparams;
++  numparams = sscanf(name,"(hd%d,%d)",&drive,&part);
++  if (name[1] == ':') {
++    logical_drive = 1;
++	floppy = (drive = toupper(name[0]) - 'A') < 2;
++	if (!floppy) drive-=2;
++  }
++
++  if (numparams >= 1 || logical_drive) {
++	if (is9xME()) return win32_open9x(fd, drive+ (floppy ? 1 :3));
++	if (logical_drive) {
++	  Dprintf("win32_open(%s) -> drive %s", name,name);
++	} else if (numparams == 2) {
++	  Dprintf("win32_open(%s) -> drive %d, part %d\n", name, drive, part);
++	} else {
++	  Dprintf("win32_open(%s) -> drive %d\n", name, drive);
++	}
++
++	char filename[256];
++	if (logical_drive) sprintf(filename,"\\\\.\\%s",name);
++	else sprintf(filename, "\\\\.\\PhysicalDrive%d", drive);
++
++	HANDLE handle = CreateFile(filename,
++							   GENERIC_READ|((mode != 0) ? GENERIC_WRITE : 0),
++							   FILE_SHARE_READ|FILE_SHARE_WRITE,
++							   NULL,
++							   OPEN_EXISTING,
++							   FILE_ATTRIBUTE_SYSTEM,
++							   NULL);
++	if (handle == INVALID_HANDLE_VALUE) {
++	  char msg[1024];
++	  sprintf(msg,"CreateFile(%s) failed", filename);
++	  perror(msg);
++	  return -1;
++	}
++	win32_fds[fd].logical = 0;
++
++	if (logical_drive) {
++		if (!floppy) {
++			PARTITION_INFORMATION partition;
++			DWORD numread=sizeof(partition);
++			char buffer[10240];
++
++
++			BOOL rvl = DeviceIoControl(handle,
++							 IOCTL_DISK_GET_PARTITION_INFO,
++							 NULL, 0,
++							 &partition, sizeof(partition),
++							 &numread,
++							 NULL);
++			if (!rvl) {
++	  			perror("ioctl failed");
++	  		}
++			else {
++	  			win32_fds[fd].handle = handle;
++	  			win32_fds[fd].part_start = partition.StartingOffset;
++	  			win32_fds[fd].part_end.QuadPart =
++					partition.StartingOffset.QuadPart +
++					partition.PartitionLength.QuadPart;
++	  			win32_fds[fd].current_pos.QuadPart = 0;
++				win32_fds[fd].logical = 1;
++			}
++	  		Dprintf("win32_open(%s) -> getting partition information", name);
++		} else {
++	  		win32_fds[fd].handle = handle;
++	  		win32_fds[fd].part_start.QuadPart = 0;
++	  		win32_fds[fd].part_end.QuadPart = 1440*1024;
++	  		win32_fds[fd].current_pos.QuadPart = 0;
++			win32_fds[fd].logical = 1;
++		}
++
++	} else if (numparams == 1) {
++	  win32_fds[fd].handle = handle;
++	  win32_fds[fd].part_start.QuadPart = 0;
++	  win32_fds[fd].part_end.QuadPart = -1;
++	  win32_fds[fd].current_pos.QuadPart = 0;
++	} else {
++	  char buffer[10240];
++	  DWORD numread;
++
++	  BOOL rvl = DeviceIoControl(handle,
++								 IOCTL_DISK_GET_DRIVE_LAYOUT,
++								 NULL, 0,
++								 &buffer, sizeof(buffer),
++								 &numread,
++								 NULL);
++	  if (!rvl) {
++		perror("ioctl failed");
++		return -1;
++	  }
++
++	  DRIVE_LAYOUT_INFORMATION* drive_layout = (DRIVE_LAYOUT_INFORMATION*)buffer;
++	  if (part >= drive_layout->PartitionCount) {
++		printf("partition %d not found on drive %d", part, drive);
++		return -1;
++	  }
++
++	  win32_fds[fd].handle = handle;
++	  win32_fds[fd].part_start = drive_layout->PartitionEntry[part].StartingOffset;
++	  win32_fds[fd].part_end.QuadPart =
++		drive_layout->PartitionEntry[0].StartingOffset.QuadPart +
++		drive_layout->PartitionEntry[0].PartitionLength.QuadPart;
++	  win32_fds[fd].current_pos.QuadPart = 0;
++	}
++  } else {
++	Dprintf("win32_open(%s) -> file\n", name);
++	HANDLE handle = CreateFile(name, GENERIC_READ|((mode != 0) ? GENERIC_WRITE : 0), FILE_SHARE_READ|FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
++	BY_HANDLE_FILE_INFORMATION info;
++	BOOL rvl = GetFileInformationByHandle(handle, &info);
++	if (!rvl) {
++	  perror("ioctl failed");
++	  return -1;
++	}
++	win32_fds[fd].handle = handle;
++	  win32_fds[fd].part_start.QuadPart = 0;
++	  win32_fds[fd].part_end.QuadPart = (((ntfs_s64)info.nFileSizeHigh)<<32)+((ntfs_s64)info.nFileSizeLow);
++	  win32_fds[fd].current_pos.QuadPart = 0;
++
++  }
++  Dprintf("win32_open(%s) -> offset 0x%llx\n", name, win32_fds[fd].part_start);
++
++  return fd;
++}
++
++#define MY_LSEEK
++#ifdef MY_LSEEK
++ntfs_s64 win32_lseek(const int fd, ntfs_s64 pos, int mode)
++{
++  LARGE_INTEGER offset;
++  int disp;
++  HANDLE hf = win32_fds[fd].handle;
++
++  if (mode == SEEK_SET) {
++    disp=FILE_BEGIN;
++	offset.QuadPart = pos;
++    offset.QuadPart += win32_fds[fd].logical ? 0 : win32_fds[fd].part_start.QuadPart;
++  } else if (mode == SEEK_CUR) {
++	disp=FILE_CURRENT;
++	offset.QuadPart = pos;
++  } else if (mode == SEEK_END) {
++	// end of partition != end of disk
++	disp=FILE_BEGIN;
++	offset.QuadPart = win32_fds[fd].part_end.QuadPart + pos
++			  - win32_fds[fd].logical ? 0 : win32_fds[fd].part_start.QuadPart;
++  }
++
++  Dprintf("win32_seek SetFilePointer(%lx:%lx)\n", offset.HighPart, offset.LowPart);
++  offset.LowPart = SetFilePointer(hf, offset.LowPart, &offset.HighPart, disp);
++  if (offset.LowPart == INVALID_SET_FILE_POINTER &&
++	GetLastError() != NO_ERROR) {
++	perror("SetFilePointer failed");
++	offset.QuadPart = -1;
++  }
++  Dprintf("win32_seek final(%llx)\n", offset.QuadPart);
++  win32_fds[fd].current_pos = offset;
++  return offset.QuadPart;
++}
++#else
++
++ntfs_s64 win32_lseek(const int fd, ntfs_s64 pos, int mode) {
++
++  LARGE_INTEGER offset;
++
++  int disp;
++
++  offset.QuadPart = pos;
++  Dprintf("win32_seek(0x%llx,%d, logical %d)\n", offset.QuadPart,mode, win32_fds[fd].logical);
++  if (mode==SEEK_SET) {
++    disp=FILE_BEGIN;
++	offset.QuadPart = pos;
++    offset.QuadPart += (win32_fds[fd].logical != 0) ? 0 : win32_fds[fd].part_start.QuadPart;
++  } else if (mode==SEEK_CUR) {
++	disp=FILE_CURRENT;
++	offset.QuadPart = pos;
++  } else if (mode==SEEK_END) {
++	// end of partition != end of disk
++	disp=FILE_BEGIN;
++	offset.QuadPart = win32_fds[fd].part_end.QuadPart + pos
++			  - win32_fds[fd].logical ? 0 : win32_fds[fd].part_start.QuadPart;
++  } else {
++	printf("win32_seek() wrong mode %d\n", mode);
++	return -1;
++  }
++
++  Dprintf("win32_seek SetFilePointer(%llx)\n", offset.QuadPart);
++  BOOL rvl = SetFilePointerEx(win32_fds[fd].handle, offset, &win32_fds[fd].current_pos, disp);
++
++  if (!rvl) {
++	perror("SetFilePointer failed");
++	return -1;
++  }
++  Dprintf("win32_seek final pos(%lld)\n", win32_fds[fd].current_pos);
++  return pos;
++}
++#endif
++ntfs_s64 win32_read(const int fd, const void *b, ntfs_s64 count) {
++  LARGE_INTEGER base, offset, numtoread, l_count;
++  l_count.QuadPart = count;
++  offset.QuadPart = win32_fds[fd].current_pos.QuadPart & 0x1FF;
++  base.QuadPart = win32_fds[fd].current_pos.QuadPart - offset.QuadPart;
++  numtoread.QuadPart = ((count+offset.QuadPart-1) | 0x1FF) + 1;
++
++  Dprintf("win32_read(fd=%d,b=%p,count=0x%llx)->(%llx+%llx:%llx)\n", fd, b, count, base, offset,numtoread);
++
++  DWORD numread = 0;
++  BOOL rvl = -1;
++
++#ifndef FORCE_ALIGNED_READ
++  if (
++	  ((((long)b) & ((ntfs_s64)0x1FF)) == 0)
++		&& ((count & ((ntfs_s64)0x1FF))==0)
++	  && ((win32_fds[fd].current_pos.QuadPart & 0x1FF) == 0)
++	  ) {
++	Dprintf("normal read\n");
++	rvl = ReadFile(win32_fds[fd].handle, (LPVOID)b, count, &numread, (LPOVERLAPPED)NULL);
++  } else {
++	Dprintf("aligned read\n");
++#endif
++	BYTE* alignedbuffer = (BYTE*)VirtualAlloc(NULL, count, MEM_COMMIT, PAGE_READWRITE);
++	Dprintf("set SetFilePointerEx(%llx)\n", base.QuadPart);
++#if 0
++	rvl = SetFilePointerEx(win32_fds[fd].handle, base, NULL, FILE_BEGIN);
++#else
++	int ol = win32_fds[fd].logical;
++	win32_fds[fd].logical = 1;
++	rvl = (win32_lseek(fd, base.QuadPart, SEEK_SET) != -1);
++	win32_fds[fd].logical = ol;
++#endif
++
++	rvl = ReadFile(win32_fds[fd].handle, (LPVOID)alignedbuffer, numtoread.QuadPart, &numread, (LPOVERLAPPED)NULL);
++
++	LARGE_INTEGER new_pos;
++	ntfs_s64 npos = (ntfs_s64) win32_fds[fd].current_pos.QuadPart + count;
++    new_pos.QuadPart = npos;
++	Dprintf("reset SetFilePointerEx(%llx)\n", new_pos.QuadPart);
++    //if (rvl) rvl = (win32_lseek(fd,count,SEEK_CUR) != -1);
++	//rvl = SetFilePointerEx(win32_fds[fd].handle, new_pos, &win32_fds[fd].current_pos, FILE_BEGIN);
++    Dprintf("win32_seek final pos(%lld)\n", win32_fds[fd].current_pos);
++	if (!rvl) {
++	  // printf("SetFilePointerEx failed");
++	}
++
++	memcpy((void*)b,alignedbuffer+offset.QuadPart,count);
++	VirtualFree(alignedbuffer, 0, MEM_RELEASE);
++#ifndef FORCE_ALIGNED_READ
++  }
++#endif
++  if (!rvl) {
++	perror("ReadFile failed");
++	return -1;
++  }
++
++#if 0
++  int c = 0;
++  for (c=0; c<count; c++) {
++	if (strncmp(b+c,"[boot loader]",strlen("[boot loader]"))==0) {
++	  printf("FOUND at offset %llx->%llx,%d\n", win32_fds[fd].current_pos,win32_fds[fd].current_pos.QuadPart-win32_fds[fd].part_start.QuadPart,c);
++	}
++  }
++#endif
++
++  if (numread > count) {
++	return count;
++  } else {
++	return numread;
++  }
++}
++
++ntfs_s64 win32_write(const int fd, const void *b, ntfs_s64 count) {
++  LARGE_INTEGER base, offset, numtoread, l_count;
++  l_count.QuadPart = count;
++  offset.QuadPart = win32_fds[fd].current_pos.QuadPart & 0x1FF;
++  base.QuadPart = win32_fds[fd].current_pos.QuadPart - offset.QuadPart;
++  numtoread.QuadPart = ((count+offset.QuadPart-1) | 0x1FF) + 1;
++
++  Dprintf("win32_write(fd=%d,b=%p,count=0x%llx)->(%llx+%llx:%llx)\n", fd, b, count, base, offset,numtoread);
++
++  DWORD numread = 0;
++  BOOL rvl = -1;
++  int  data_written = 0;
++
++#ifndef FORCE_ALIGNED_READ
++  if (
++	  ((((long)b) & ((ntfs_s64)0x1FF)) == 0)
++		&& ((count & ((ntfs_s64)0x1FF))==0)
++	  && ((win32_fds[fd].current_pos.QuadPart & 0x1FF) == 0)
++	  ) {
++	Dprintf("normal write\n");
++	rvl = WriteFile(win32_fds[fd].handle, (LPVOID)b, count, &numread, (LPOVERLAPPED)NULL);
++  } else {
++	Dprintf("aligned write\n");
++#endif
++	BYTE* alignedbuffer = (BYTE*)VirtualAlloc(NULL, count, MEM_COMMIT, PAGE_READWRITE);
++	memcpy(alignedbuffer+offset.QuadPart,(void*)b,count);
++	Dprintf("set SetFilePointerEx(%llx)\n", base.QuadPart);
++#if 0
++	rvl = SetFilePointerEx(win32_fds[fd].handle, base, NULL, FILE_BEGIN);
++#else
++	int ol = win32_fds[fd].logical;
++	win32_fds[fd].logical = 1;
++	rvl = (win32_lseek(fd, base.QuadPart, SEEK_SET) != -1);
++	win32_fds[fd].logical = ol;
++#endif
++
++	if (rvl) rvl = WriteFile(win32_fds[fd].handle, (LPVOID)alignedbuffer, numtoread.QuadPart, &numread, (LPOVERLAPPED)NULL);
++	else printf("fail to seek to %lld\n", base.QuadPart);
++	if (!rvl) {
++		perror("WriteFile failed");
++		}
++	else data_written = 1;
++	LARGE_INTEGER new_pos;
++	ntfs_s64 npos = (ntfs_s64) win32_fds[fd].current_pos.QuadPart + count;
++    new_pos.QuadPart = npos;
++	Dprintf("reset SetFilePointerEx(%llx)\n", new_pos.QuadPart);
++    //if (rvl) rvl = (win32_lseek(fd,count,SEEK_CUR) != -1);
++	//rvl = SetFilePointerEx(win32_fds[fd].handle, new_pos, &win32_fds[fd].current_pos, FILE_BEGIN);
++    Dprintf("win32_seek final pos(%lld)\n", win32_fds[fd].current_pos);
++	if (!rvl) {
++	  printf("SetFilePointer failed");
++	  rvl = 0;
++	}
++
++	VirtualFree(alignedbuffer, 0, MEM_RELEASE);
++#ifndef FORCE_ALIGNED_READ
++  }
++#endif
++  if (!data_written) {
++	perror("WriteFile failed");
++	return -1;
++  }
++
++#if 0
++  int c = 0;
++  for (c=0; c<count; c++) {
++	if (strncmp(b+c,"[boot loader]",strlen("[boot loader]"))==0) {
++	  printf("FOUND at offset %llx->%llx,%d\n", win32_fds[fd].current_pos,win32_fds[fd].current_pos.QuadPart-win32_fds[fd].part_start.QuadPart,c);
++	}
++  }
++#endif
++
++  if (numread > count) {
++	return count;
++  } else {
++	return numread;
++  }
++}
++int win32_close(int fd) {
++
++  Dprintf("win32_close(%d)\n", fd);
++
++  BOOL rvl = CloseHandle(win32_fds[fd].handle);
++  win32_fds[fd].handle = 0;
++
++  if (!rvl) {
++	perror("CloseHandle failed");
++	return -1;
++  }
++
++  return 0;
++}
++
++ntfs_s64 win32_bias(int fd) {
++  return win32_fds[fd].part_start.QuadPart;
++}
++
++unsigned long win32_bias_sector(int fd) {
++  return (win32_fds[fd].part_start.QuadPart/512);
++}
++
++ntfs_s64 win32_filepos(int fd) {
++  return win32_fds[fd].current_pos.QuadPart;
++}
++
++#define VWIN32_DIOC_DOS_DRIVEINFO (6)
++#define VWIN32_DIOC_DOS_INT13   (4)
++#define VWIN32_DIOC_DOS_INT25   (2)
++#define VWIN32_DIOC_DOS_INT26   (3)
++#define VWIN32_DIOC_DOS_IOCTL	(1)
++
++typedef struct _DIOC_REGISTERS
++{
++    DWORD reg_EBX;
++    DWORD reg_EDX;
++    DWORD reg_ECX;
++    DWORD reg_EAX;
++    DWORD reg_EDI;
++    DWORD reg_ESI;
++    DWORD reg_Flags;
++} DIOC_REGISTERS, *PDIOC_REGISTERS;
++
++#pragma pack(1)
++struct media
++{
++    WORD infolevel;
++    DWORD serialnumber;
++    char vollable[11];
++    char filesystype[8];
++};
++
++struct DISKIO
++{
++    DWORD startsector;
++    WORD  sectorsnum;
++    DWORD buff;
++};
++
++struct boot
++{
++	BYTE jump[3] ;
++	char OEMname[8] ;
++	WORD bps ;
++	BYTE spc ;
++	WORD reservedsec ;
++	BYTE fatcopies ;
++	WORD maxdirentries ;
++	WORD totalsec ;
++	BYTE mediadesc ;
++	WORD secperfat ;
++	WORD secpertrack ;
++	WORD noofsides ;
++	DWORD hidden ;
++	DWORD hugesec ;
++    BYTE drivenumber ;
++    BYTE reserved ;
++    BYTE bootsignature ;
++    DWORD volumeid ;
++    char volumelabel[11] ;
++    char filesystype[8] ;
++    BYTE unused[450] ;
++} ;
++
++struct boot32
++{
++    BYTE jump[3] ;
++	char bsOemName[8] ;
++    WORD BytesPerSector ;
++    BYTE SectorsPerCluster ;
++    WORD ReservedSectors ;
++    BYTE NumberOfFATs ;
++    WORD RootEntries ;
++    WORD TotalSectors ;
++    BYTE MediaDescriptor ;
++    WORD SectorsPerFAT ;
++    WORD SectorsPerTrack ;
++    WORD Heads ;
++    WORD HiddenSectors ;
++    WORD HiddenSectorsHigh ;
++    WORD BigTotalSectors ;
++    WORD BigTotalSectorsHigh ;
++    WORD BigSectorsPerFat ;
++    WORD BigSectorsPerFatHi ;
++    WORD ExtFlags ;
++    WORD FS_Version ;
++    WORD RootDirStrtClus ;
++    WORD RootDirStrtClusHi ;
++    WORD FSInfoSec ;
++    WORD BkUpBootSec ;
++    WORD Reserved[6] ;
++    BYTE bsDriveNumber ;
++    BYTE bsReserved ;
++    BYTE bsBootSignature ;
++    DWORD bsVolumeID ;
++    char bsVolumeLabel[11] ;
++    char bsFileSysType[8] ;
++	BYTE unused [422] ;
++} ;
++
++struct 	bigfatbootfsinfo
++{
++	DWORD	FSInf_Sig ;
++	DWORD	FSInf_free_clus_cnt ;
++	DWORD	FSInf_next_free_clus ;
++	DWORD	FSInf_resvd[3] ;
++} ;
++
++struct  partitiontable
++{
++	BYTE boot_flag;
++	BYTE head_start;
++	WORD cylinder_sector_start;
++	BYTE fs_type;
++	BYTE head_end;
++	WORD cylinder_sector_end;
++	DWORD sect_start;
++	DWORD sect_total;
++};
++
++#pragma pack()
++
++int win32_disk95hasInt13ext(HANDLE hDevice, int drive)
++{
++   DIOC_REGISTERS reg;
++   DWORD byteCnt;
++   int fResult;
++
++   reg.reg_EAX = 0x4100;
++   reg.reg_EBX = 0x55aa;
++   reg.reg_EDX = drive;
++   reg.reg_Flags=0x0001;
++
++   fResult = DeviceIoControl(hDevice, VWIN32_DIOC_DOS_INT13, &reg,
++		sizeof(reg), &reg, sizeof(reg), &byteCnt, 0);
++
++   Dprintf("check int13 extension result flags:%lx, bx:%lx\n",
++		reg.reg_Flags, reg.reg_EBX);
++   if (fResult && (reg.reg_Flags & 0x0001) == 0 && reg.reg_EBX == 0xaa55) {
++	return 1;
++	}
++   else return 0;
++}
++
++int win32_get95disk_info(HANDLE hDevice, int drive, WORD* cylinder,
++WORD *sector, WORD* head)
++{
++   DIOC_REGISTERS reg;
++   DWORD byteCnt;
++   int fResult;
++
++   reg.reg_EAX = 0x0800;
++   reg.reg_EBX = 0x0;
++   reg.reg_ECX = 0x0;
++   reg.reg_EDX = drive;
++   reg.reg_Flags=0x0001;
++
++   fResult = DeviceIoControl(hDevice, VWIN32_DIOC_DOS_INT13, &reg,
++		sizeof(reg), &reg, sizeof(reg), &byteCnt, 0);
++
++   Dprintf("return of get disk info cx:%lx dx:%lx ax:%lx flag:%lx\n",
++		reg.reg_ECX,reg.reg_EDX,reg.reg_EAX, reg.reg_Flags);
++
++   if (fResult && (reg.reg_Flags & 0x0001) == 0) {
++	*sector = reg.reg_ECX & 0x3f;
++	*cylinder = reg.reg_ECX >> 6;
++	*head = reg.reg_EDX >> 8;
++	return 0;
++	}
++   else return 1;
++}
++
++int is9xME()
++{
++	OSVERSIONINFO ovinfo;
++	ovinfo.dwOSVersionInfoSize=sizeof (OSVERSIONINFO);
++	GetVersionEx(&ovinfo);
++	if(ovinfo.dwPlatformId==VER_PLATFORM_WIN32_NT)
++		return 0;
++	else {
++		return 1;
++	}
++}
++
++int getmediaid (HANDLE hDevice, int drive_1, struct media *m )
++{
++	DIOC_REGISTERS r = {0};
++	DWORD cb ;
++
++	r.reg_EAX = 0x440d ;
++	r.reg_EBX = drive_1 ;
++	r.reg_ECX = 0x0866 ;
++	r.reg_EDX = ( DWORD ) m ;
++	r.reg_Flags = 1 ;
++
++	DeviceIoControl ( hDevice, VWIN32_DIOC_DOS_IOCTL,
++						&r, sizeof ( r ), &r, sizeof ( r ), &cb, 0 ) ;
++}
++
++void readabsolutesectors (  HANDLE hDevice, int drive_0, int startsect,
++					  int numsect, void * buffer )
++{
++	DIOC_REGISTERS r ;
++	struct DISKIO di ;
++	DWORD cb;
++	int fResult;
++
++	r.reg_EAX = drive_0 ;
++	r.reg_EBX = ( DWORD ) &di ;
++	r.reg_ECX = -1 ;
++	r.reg_Flags = 1 ;
++	di.startsector = startsect ;
++	di.sectorsnum = numsect ;
++	di.buff = ( DWORD ) buffer ;
++
++	fResult = DeviceIoControl ( hDevice, VWIN32_DIOC_DOS_INT25,
++						&r, sizeof ( r ), &r, sizeof ( r ), &cb, 0 ) ;
++
++	if (!fResult || (r.reg_Flags & 0x0001)) return ;
++	else {
++	Dprintf("return %s\n",buffer);
++	}
++}
++
++int writeabsolutesectors (  HANDLE hDevice, int drive_0, int startsect,
++					  int numsect, void * buffer )
++{
++	DIOC_REGISTERS r ;
++	struct DISKIO di ;
++	DWORD cb;
++	int fResult;
++
++	r.reg_EAX = drive_0 ;
++	r.reg_EBX = ( DWORD ) &di ;
++	r.reg_ECX = -1 ;
++	r.reg_Flags = 1 ;
++	di.startsector = startsect ;
++	di.sectorsnum = numsect ;
++	di.buff = ( DWORD ) buffer ;
++
++	fResult = DeviceIoControl ( hDevice, VWIN32_DIOC_DOS_INT26,
++						&r, sizeof ( r ), &r, sizeof ( r ), &cb, 0 ) ;
++
++	if (!fResult || (r.reg_Flags & 0x0001)) {
++		Dprintf("writeabsolutesector(%d) %d,%d failed %d\n",
++				drive_0, startsect,numsect,r.reg_Flags);
++		return -1;
++	} else {
++		Dprintf("writeabsolutesector(%d) %d,%d done\n",
++			drive_0, startsect,numsect);
++	}
++}
++
++#define sector_offset 0x18
++#define head_offset 0x1A
++
++int readabsolutesectors32 ( HANDLE hDevice, int drive_1, int startsect,
++								   int numsect, char *buffer )
++{
++	DIOC_REGISTERS r ;
++	struct DISKIO di ;
++	DWORD cb ;
++	int fResult;
++
++	Dprintf("readabsolutesectors32(%lx:%d) : sector %d,%d\n",
++		hDevice, drive_1,startsect, numsect);
++
++	r.reg_EAX = 0x7305 ;
++	r.reg_EBX = ( DWORD ) &di ;
++	r.reg_ECX = -1 ;
++	r.reg_EDX = drive_1 ;
++	r.reg_ESI = 0 ;       // 0:read, 1:write
++	r.reg_Flags = 0x0001 ;
++	di.startsector = startsect ;
++	di.sectorsnum = numsect ;
++	di.buff = ( DWORD ) buffer ;
++
++	fResult = DeviceIoControl( hDevice, VWIN32_DIOC_DOS_DRIVEINFO,
++					  &r, sizeof( r ), &r, sizeof( r ), &cb, 0 );
++	if (!fResult || (r.reg_Flags & 0x0001)) {
++		Dprintf("readabsolutesectors32(%lx:%d) : sector %d,%d failed %i\n",
++		hDevice, drive_1,startsect, numsect, r.reg_Flags);
++		return -1;
++		}
++	else {
++    if (startsect == 0) {
++	Dprintf("drive %d,%d: sector per track %d, heads %d\n", drive_1,startsect,
++		*(WORD *)&buffer[sector_offset], *(WORD *)&buffer[head_offset]);
++    }
++	return 0;
++	}
++}
++
++int writeabsolutesectors32 ( HANDLE hDevice, int drive_1, int startsect,
++								   int numsect, char *buffer )
++{
++	DIOC_REGISTERS r ;
++	struct DISKIO di ;
++	DWORD cb ;
++	int fResult;
++
++	Dprintf("writeabsolutesectors32(%lx:%d) : sector %d,%d\n",
++		hDevice, drive_1,startsect, numsect);
++
++	r.reg_EAX = 0x7305 ;
++	r.reg_EBX = ( DWORD ) &di ;
++	r.reg_ECX = -1 ;
++	r.reg_EDX = drive_1 ;
++	r.reg_ESI = 1 ;       // 0:read, 1:write
++	r.reg_Flags = 0x0001 ;
++	di.startsector = startsect ;
++	di.sectorsnum = numsect ;
++	di.buff = ( DWORD ) buffer ;
++
++	fResult = DeviceIoControl( hDevice, VWIN32_DIOC_DOS_DRIVEINFO,
++					  &r, sizeof( r ), &r, sizeof( r ), &cb, 0 );
++	if (!fResult || (r.reg_Flags & 0x0001)) {
++		Dprintf("writeabsolutesectors32(%lx:%d) : sector %d,%d failed\n",
++			hDevice, drive_1,startsect, numsect);
++		return -1;
++		}
++	else {
++    if (startsect == 0) {
++	Dprintf("drive %d,%d: sector per track %d, heads %d\n", drive_1,startsect,
++		*(WORD *)&buffer[sector_offset], *(WORD *)&buffer[head_offset]);
++    }
++	return 0;
++	}
++}
++
++#define bpb_sector_offset 0x18
++#define bpb_head_offset   0x1A
++#define bpb_hidden_offset 0x1C
++#define bpb_sig_offset    0x42
++#define bpb_sectcnt_offset 0x13
++#define bpb_bigsectcnt_offset 0x20
++#define SECTOR_SIZE 512
++int load_bootinfo(HANDLE hDevice, int fd, int drive, char *buf)
++{
++	struct boot32 *p32;
++	struct boot *p16;
++	DWORD hidden=0, total=0;
++	char buffer[512];
++
++	p32 = (struct boot32 *)buf;
++	p16 = (struct boot *)buf;
++
++	if (strncmp(p32->bsFileSysType,"FAT32",5) == 0) {
++		hidden = *(DWORD *)&buf[bpb_hidden_offset];
++		total = *(WORD *)&buf[bpb_sectcnt_offset];
++		if (total == 0) total = *(DWORD *)&buf[bpb_bigsectcnt_offset];
++	} else if (strncmp(p16->filesystype,"FAT",3) == 0) {
++		hidden = *(DWORD *)&buf[bpb_hidden_offset];
++		total = *(WORD *)&buf[bpb_sectcnt_offset];
++		if (total == 0) total = *(DWORD *)&buf[bpb_bigsectcnt_offset];
++	} else if (strncmp(&buffer[3],"NTFS",4) == 0) {
++		hidden = *(DWORD *)&buf[bpb_hidden_offset];
++		total = *(DWORD *)&buf[bpb_bigsectcnt_offset];
++	} else if (drive > 2) {
++		Dprintf("invalid boot sector \n");
++		return -1;
++		}
++  	win32_fds[fd].part_start.QuadPart = hidden;
++  	win32_fds[fd].part_start.QuadPart*= SECTOR_SIZE;
++  	win32_fds[fd].part_end.QuadPart = hidden + total;
++  	win32_fds[fd].part_end.QuadPart*= SECTOR_SIZE;
++	Dprintf("partition info: %ld:%ld\n", hidden, total);
++	return 0;
++}
++
++int win32_open9x(int fd, int drive)
++{
++ 	HANDLE 	hDevice;
++	DIOC_REGISTERS 	reg;
++	BOOL 	fResult;
++	DWORD 	byteCnt;
++	char	buffer[512];
++
++	hDevice = CreateFile("\\\\.\\vwin32", 0, 0, NULL, 0,
++		FILE_FLAG_DELETE_ON_CLOSE, NULL);
++
++	if (hDevice != INVALID_HANDLE_VALUE) {
++		if (readabsolutesectors32(hDevice, drive, 0, 1, buffer) == 0 &&
++			load_bootinfo(hDevice, fd, drive, buffer) == 0) {
++			win32_fds[fd].handle = hDevice;
++  			win32_fds[fd].drive = drive;
++  			win32_fds[fd].logical = 1;
++	  		win32_fds[fd].current_pos.QuadPart = 0;
++		} else {
++			CloseHandle(hDevice); return -1;
++		}
++	} else return -1;
++
++	return fd;
++}
++
++char readbuf_9xme[32*1024];
++
++int win32_readsector(int fd, char *buf, int sector, int byte_offset, int byte_cnt)
++{
++	int rvl = 0;
++	int t_cnt = byte_offset + byte_cnt;
++	int s_cnt;
++
++	s_cnt = t_cnt/SECTOR_SIZE + ((t_cnt%SECTOR_SIZE) ? 1 : 0);
++	Dprintf("win32_readsector(%d) %ld:%ld:%ld\n", fd, sector, byte_offset, byte_cnt);
++	Dprintf("win32_readsector(%d) to read %ld:%ld:%ld\n", fd, sector, s_cnt, t_cnt);
++	if (is9xME()) {
++		rvl = readabsolutesectors32(win32_fds[fd].handle,
++								win32_fds[fd].drive, sector, s_cnt, readbuf_9xme);
++		if (rvl == 0) {
++			Dprintf("readabsolutsector32 return %ld:%ld:%ld\n", sector, byte_offset, byte_cnt);
++			memmove(buf,readbuf_9xme+byte_offset,byte_cnt);
++			rvl = 1;
++		} else rvl = 0;
++	} else {
++		LARGE_INTEGER offset;
++
++		offset.QuadPart = (ntfs_s64) sector*SECTOR_SIZE + byte_offset;
++		if (win32_lseek(fd, offset.QuadPart, SEEK_SET) != -1) {
++			if (win32_read(fd, buf, byte_cnt) != -1) rvl = 1;
++		} else {
++			perror("lseek failed");
++		}
++	}
++	return rvl;
++}
++
++int win32_writesector(int fd, char *buf, int sector, int byte_offset, int byte_cnt)
++{
++	int rvl = 0;
++	int t_cnt = byte_offset + byte_cnt;
++	int s_cnt;
++
++	s_cnt = t_cnt/SECTOR_SIZE + ((t_cnt%SECTOR_SIZE) ? 1 : 0);
++	Dprintf("win32_writesector(%d) %ld:%ld:%ld\n", fd, sector, byte_offset, byte_cnt);
++	Dprintf("win32_writesector(%d) to write %ld:%ld:%ld\n", fd, sector, s_cnt, t_cnt);
++	if (is9xME()) {
++		rvl = readabsolutesectors32(win32_fds[fd].handle,
++								win32_fds[fd].drive, sector, s_cnt, readbuf_9xme);
++		if (rvl == 0) {
++			if (win32_fds[fd].mode) {
++				memmove(readbuf_9xme+byte_offset,buf, byte_cnt);
++				rvl = writeabsolutesectors32(win32_fds[fd].handle,
++								win32_fds[fd].drive, sector, s_cnt, readbuf_9xme);
++			} else {
++				Dprintf("writeabsolutsector32 suppressed\n");
++				if (memcmp(readbuf_9xme+byte_offset,buf,byte_cnt) != 0) {
++					Dprintf("writeabsolutsector32, content different %d\n", sector);
++				}
++			}
++		}
++		if (rvl == 0) {
++			Dprintf("writeabsolutsector32 return %ld:%ld:%ld\n", sector, byte_offset, byte_cnt);
++			rvl = 1;
++		} else rvl = 0;
++	} else {
++		LARGE_INTEGER offset;
++
++		offset.QuadPart = (ntfs_s64) sector*SECTOR_SIZE + byte_offset;
++		if (win32_lseek(fd, offset.QuadPart, SEEK_SET) != -1) {
++			if (win32_write(fd, buf, byte_cnt) != -1) rvl = 1;
++		} else {
++			perror("lseek failed");
++		}
++	}
++	return rvl;
++}
++
++int win32_read95disk(BYTE *buffer, WORD drive, WORD cylinder, WORD sector, WORD head, int count)
++{
++ 	HANDLE 	hDevice;
++	DIOC_REGISTERS 	reg;
++	BOOL 	fResult;
++	DWORD 	byteCnt;
++
++	hDevice = CreateFile("\\\\.\\vwin32", 0, 0, NULL, 0,
++		FILE_FLAG_DELETE_ON_CLOSE, NULL);
++
++	reg.reg_EAX=0x0200 + count;
++	reg.reg_EBX=(DWORD)buffer;
++	reg.reg_ECX=cylinder*0x100 + sector;
++	reg.reg_EDX=head;
++	reg.reg_EDX<<=8;
++	reg.reg_EDX+=drive;
++	reg.reg_Flags=0x0001;
++
++	readabsolutesectors(hDevice, 3, 0, 1 ,buffer);
++	readabsolutesectors32(hDevice, 3, 0, 1 ,buffer);
++	win32_disk95hasInt13ext(hDevice, drive);
++	win32_get95disk_info(hDevice, drive, &cylinder, &sector, &head);
++#if 0
++	fResult = DeviceIoControl(hDevice, VWIN32_DIOC_DOS_INT13, &reg,
++		sizeof(reg), &reg, sizeof(reg), &byteCnt, 0);
++#endif
++	CloseHandle(hDevice);
++
++	if(!fResult || (reg.reg_Flags & 0x0001))
++		return -1;
++
++	return 0;
++}
++
++#define PT_OFFSET	0x1be
++int win32_mbr(char *mbr)
++{
++	struct partitiontable *pt=(struct partitiontable *)&mbr[PT_OFFSET];
++	int i;
++
++	for (i = 0; i < 4; i++) {
++		printf("%02x %04i %04i(%04i) %02x %04i %04i(%04d) %08ld %08ld\n",
++			(short)pt->boot_flag,(short) pt->head_start,
++			(unsigned short)pt->cylinder_sector_start>>6,
++			(unsigned short)pt->cylinder_sector_start & 0x3f,
++			(short)pt->fs_type,
++			(short)pt->head_end,
++			(unsigned short)pt->cylinder_sector_end>>6,
++			(unsigned short)pt->cylinder_sector_end & 0x3f,
++			pt->sect_start,pt->sect_total);
++		pt++;
++	}
++	return 0;
++}
+diff -Nuarp grub-0.97/win32/win32.h grub-0.97+/win32/win32.h
+--- grub-0.97/win32/win32.h	1970-01-01 09:00:00.000000000 +0900
++++ grub-0.97+/win32/win32.h	2009-12-30 14:53:00.000000000 +0900
+@@ -0,0 +1,22 @@
++#ifdef WIN32
++
++typedef long long int ntfs_s64;
++
++int win32_open(const char* name, int mode);
++ntfs_s64 win32_bias(const int fd);
++unsigned long win32_bias_sector(const int fd);
++ntfs_s64 win32_filepos(const int fd);
++ntfs_s64 win32_lseek(const int fd, ntfs_s64 pos, int mode);
++ntfs_s64 win32_read(const int fd, const void* buffer, ntfs_s64 count);
++ntfs_s64 win32_write(const int fd, const void* buffer, ntfs_s64 count);
++int win32_close(const int fd);
++//int win32_read95disk(BYTE *buffer, WORD drive, WORD cylinder, WORD sector, WORD head, int count);
++int logical_to_physical(char *name, int *drive, int *part);
++
++#define open win32_open
++#define lseek win32_lseek
++#define close win32_close
++#define read win32_read
++#define off_t ntfs_s64
++
++#endif

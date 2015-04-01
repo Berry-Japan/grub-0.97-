@@ -1,0 +1,80 @@
+--- grub-0.97/stage2/fsys_ntfs.c.orig	2004-04-08 23:10:52.000000000 +0900
++++ grub-0.97/stage2/fsys_ntfs.c	2005-08-20 19:44:13.000000000 +0900
+@@ -228,7 +228,7 @@
+     return 1;
+ }
+
+-static void rewind_run_list( RUNL *runl) {
++static void rewind_run_list(RUNL *runl) {
+     runl->vcn = runl->svcn;
+     runl->ptr = runl->start;
+     runl->cnum0 = 0;
+@@ -253,7 +253,8 @@
+     n = t&0xf;
+     runl->clen = 0; v = 1;
+     while(n--) {
+-	runl->clen += v * *((__u8 *)runl->ptr)++;
++	runl->clen += v * *((__u8 *)runl->ptr);
++	runl->ptr++;
+ 	v <<= 8;
+     }
+     n = (t>>4)&0xf;
+@@ -263,7 +264,8 @@
+ 	int c = 0;
+ 	v = 1;
+ 	while(n--) {
+-	    c += v * *((__u8 *)runl->ptr)++;
++	    c += v * *((__u8 *)runl->ptr);
++	    runl->ptr++;
+ 	    v <<= 8;
+ 	}
+ 	if(c & (v>>1)) c -= v;
+@@ -443,7 +445,7 @@
+ {
+ #ifdef DEBUG_NTFS
+     printf("searching attribute %x <%s>\n", type, name);
+-#endif
++#endif
+
+     mftr->attr_type = type;
+     mftr->attr_name = name;
+@@ -702,7 +704,8 @@
+ }
+ #endif
+
+-int ntfs_read(char *buf, int len){
++int ntfs_read(char *buf, int len)
++{
+     int ret;
+ #ifdef STAGE1_5
+ /* stage2 can't be resident/compressed/encrypted files,
+@@ -777,7 +780,8 @@
+ 		}
+ 		if(dcslen)
+ 		    memmove(dcsbuf, dcsptr, dcslen);
+-		dcsptr = dcsbuf;
++		//dcsptr = dcsbuf;
++		cluster16[26] = (int)dcsbuf;
+ 		while((dcslen+clustersize) < DECOMP_SOURCE_BUFFER_SIZE) {
+ 		    if(cluster16[index16]==0)
+ 			break;
+@@ -800,7 +804,8 @@
+ 		}
+ 		dcrem -= size;
+ 		dclen += size;
+-		dcsptr += head;
++		//dcsptr += head;
++		cluster16[26] += head;
+ 		dcslen -= head;
+ 	    }
+ 	    continue;
+@@ -849,7 +854,8 @@
+ 	    dcrem = filemax - dcoff;
+ 	    if(dcrem > 16 * clustersize)
+ 		dcrem = 16 * clustersize;
+-	    dcsptr = dcsbuf;
++	    //dcsptr = dcsbuf;
++	   cluster16[26] = (int)dcsbuf;
+ 	    dcslen = 0;
+ 	}
+     }

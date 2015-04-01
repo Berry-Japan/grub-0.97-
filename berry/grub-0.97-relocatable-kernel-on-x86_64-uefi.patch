@@ -1,0 +1,139 @@
+From 1ccd96dbe74f7dad8d57080c83b68de85f1fe466 Mon Sep 17 00:00:00 2001
+From: Peter Jones <pjones@redhat.com>
+Date: Tue, 11 Aug 2009 11:26:17 -0400
+Subject: [PATCH] Dynamically choose load address for bzimage on 64-bit UEFI.
+
+Instead of loading the kernel at one meg, dynamically load it at an
+address that UEFI tells us is actually available.  Based on a patch from
+Masahiro Matsuya <mmatsuya@redhat.com>.
+---
+ efi/efimm.c               |   39 +++++++++++++++++++++++++++++++++++++++
+ efi/grub/efi/efi.h        |    1 +
+ efi/grub/x86_64/linux.h   |    1 -
+ efi/x86_64/loader/linux.c |   13 ++++++++++++-
+ 4 files changed, 52 insertions(+), 2 deletions(-)
+
+diff --git a/efi/efimm.c b/efi/efimm.c
+index d14b630..3b790d5 100644
+--- a/efi/efimm.c
++++ b/efi/efimm.c
+@@ -78,6 +78,45 @@ grub_efi_free_pool (void *buffer)
+   Call_Service_1(b->free_pool, buffer);
+ }
+ 
++void *
++grub_efi_allocate_anypages(grub_efi_uintn_t pages)
++{
++  grub_efi_boot_services_t *b;
++  grub_efi_status_t status;
++  grub_efi_physical_address_t address;
++
++  b = grub_efi_system_table->boot_services;
++  status = Call_Service_4 (b->allocate_pages,
++			    GRUB_EFI_ALLOCATE_ANY_PAGES,
++			    GRUB_EFI_LOADER_DATA,
++			    pages,
++			    &address);
++  if (status != GRUB_EFI_SUCCESS)
++  	return 0;
++
++  if (allocated_pages)
++     {
++       unsigned i;
++ 
++       for (i = 0; i < MAX_ALLOCATED_PAGES; i++)
++ 	if (allocated_pages[i].addr == 0)
++        {
++              allocated_pages[i].addr = address;
++              allocated_pages[i].num_pages = pages;
++              break;
++        }
++ 
++       if (i == MAX_ALLOCATED_PAGES)
++        {
++           grub_printf ("too many page allocations");
++           return NULL;
++        }
++     }
++ 
++  return (void *) ((grub_addr_t) address);
++
++}
++
+ /* Allocate pages. Return the pointer to the first of allocated pages.  */
+ void *
+ grub_efi_allocate_pages (grub_efi_physical_address_t address,
+diff --git a/efi/grub/efi/efi.h b/efi/grub/efi/efi.h
+index 5409911..59314bd 100644
+--- a/efi/grub/efi/efi.h
++++ b/efi/grub/efi/efi.h
+@@ -46,6 +46,7 @@ int grub_efi_get_text_mode(void);
+ void grub_efi_stall (grub_efi_uintn_t microseconds);
+ void *grub_efi_allocate_pool (grub_efi_uintn_t size);
+ void grub_efi_free_pool (void *buffer);
++void *grub_efi_allocate_anypages (grub_efi_uintn_t pages);
+ void *grub_efi_allocate_pages (grub_efi_physical_address_t address,
+ 			       grub_efi_uintn_t pages);
+ void
+diff --git a/efi/grub/x86_64/linux.h b/efi/grub/x86_64/linux.h
+index 65af9ee..06e83d0 100644
+--- a/efi/grub/x86_64/linux.h
++++ b/efi/grub/x86_64/linux.h
+@@ -28,7 +28,6 @@
+ #define GRUB_LINUX_BOOT_LOADER_TYPE	0x72
+ #define GRUB_LINUX_HEAP_END_OFFSET	(0x9000 - 0x200)
+ 
+-#define GRUB_LINUX_BZIMAGE_ADDR		0x100000
+ #define GRUB_LINUX_ZIMAGE_ADDR		0x10000
+ #define GRUB_LINUX_OLD_REAL_MODE_ADDR	0x90000
+ #define GRUB_LINUX_SETUP_STACK		0x9000
+diff --git a/efi/x86_64/loader/linux.c b/efi/x86_64/loader/linux.c
+index 542b0b0..cfa66b2 100644
+--- a/efi/x86_64/loader/linux.c
++++ b/efi/x86_64/loader/linux.c
+@@ -40,6 +40,7 @@
+ static unsigned long linux_mem_size;
+ static int loaded;
+ static void *real_mode_mem;
++static void *prot_mode_mem;
+ static void *initrd_mem;
+ static void *mmap_buf;
+ static grub_efi_uintn_t real_mode_pages;
+@@ -143,6 +144,7 @@ allocate_pages (grub_size_t real_size, grub_size_t prot_size)
+ 
+   /* Initialize the memory pointers with NULL for convenience.  */
+   real_mode_mem = 0;
++  prot_mode_mem = 0;
+   mmap_buf = 0;
+ 
+   /* Read the memory map temporarily, to find free space.  */
+@@ -205,6 +207,13 @@ allocate_pages (grub_size_t real_size, grub_size_t prot_size)
+       goto fail;
+     }
+ 
++  grub_printf("Trying to allocate %u pages for VMLINUZ\n",
++		(unsigned) prot_mode_pages);
++  prot_mode_mem = grub_efi_allocate_anypages(prot_mode_pages);
++  if (!prot_mode_mem)
++	grub_fatal("Cannot allocate pages for VMLINUZ");
++  
++  
+   mmap_buf = grub_efi_allocate_pages (0, mmap_pages);
+   if (! mmap_buf)
+     {
+@@ -501,9 +510,11 @@ grub_load_linux (char *kernel, char *arg)
+ 
+   grub_seek ((setup_sects << SECTOR_BITS) + SECTOR_SIZE);
+   len = prot_size;
+-  if (grub_read ((char *) GRUB_LINUX_BZIMAGE_ADDR, len) != len)
++  if (grub_read ((char *)prot_mode_mem, len) != len)
+     grub_printf ("Couldn't read file");
+ 
++  params->hdr.code32_start = (long)prot_mode_mem;
++
+   if (errnum == ERR_NONE)
+     {
+       loaded = 1;
+-- 
+1.6.4
+
