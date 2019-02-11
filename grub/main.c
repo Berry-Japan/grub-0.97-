@@ -35,7 +35,7 @@ int grub_stage2 (void);
 
 char *program_name = 0;
 int use_config_file = 1;
-int use_preset_menu = 0;
+int use_preset_menu_ = 0;
 #ifdef HAVE_LIBCURSES
 int use_curses = 1;
 #else
@@ -234,7 +234,7 @@ main (int argc, char **argv)
 	  break;
 
 	case OPT_PRESET_MENU:
-	  use_preset_menu = 1;
+	  use_preset_menu_ = 1;
 	  break;
 	  
 	default:

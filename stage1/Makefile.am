@@ -1,7 +1,7 @@
-pkglibdir = $(libdir)/$(PACKAGE)/$(host_cpu)-$(host_vendor)
-nodist_pkglib_DATA = stage1
+plibdir = $(libdir)/$(PACKAGE)/$(host_cpu)-$(host_vendor)
+nodist_plib_DATA = stage1
 
-CLEANFILES = $(nodist_pkglib_DATA)
+CLEANFILES = $(nodist_plib_DATA)
 
 # We can't use builtins or standard includes.
 AM_CCASFLAGS = $(STAGE1_CFLAGS) -fno-builtin -nostdinc

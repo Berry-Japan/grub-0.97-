@@ -1,24 +1,21 @@
 Name: grub
 Version: 0.97+
-Release: b3
+Release: b4
 Summary: Grand Unified Boot Loader.
 Group: System Environment/Base
 License: GPLv2+
 
-ExclusiveArch: i686 x86_64 ia64 i586
-#BuildRequires: binutils >= 2.9.1.0.23, ncurses-devel, ncurses-static, texinfo
 BuildRequires: binutils >= 2.9.1.0.23, ncurses-devel
-BuildRequires: autoconf /usr/lib/crt1.o automake
-#BuildRequires: gnu-efi >= 3.0e-9
-#BuildRequires: glibc-static
-#Requires(post): /sbin/install-info
-#Requires(preun): /sbin/install-info
-Requires: mktemp
-#Requires: system-logos
+BuildRequires: autoconf automake
+BuildRequires: nasm
+%ifarch x86_64
+BuildRequires: glibc-devel(x86-32)
+BuildRequires: libstdc++(x86-32)
+BuildRequires: libgcc(x86-32)
+%endif
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
-BuildArchitectures: i586
 
-URL: http://www.gnu.org/software/%{name}/
+URL: https://github.com/chenall/grub4dos
 Source0: ftp://alpha.gnu.org/gnu/%{name}/%{name}-%{version}.tar.bz2
 
 %description
@@ -31,53 +28,55 @@ systems.
 %setup -q
 # This is from
 # http://git.kernel.org/?p=boot/grub-fedora/grub-fedora.git;a=summary
-patch -p1 < berry/grub-fedora-9.patch
-patch -p1 < berry/grub-keystatus.patch
+#patch -p1 < berry/grub-fedora-9.patch
+#patch -p1 < berry/grub-keystatus.patch
 
 # Various bugfixes
 # http://fedorapeople.org/~lkundrak/grub-fedora.git/
-patch -p1 < berry/0001-Get-rid-of-usr-bin-cmp-dependency.patch
-patch -p1 < berry/0002-Add-strspn-strcspn-and-strtok_r.patch
-patch -p1 < berry/0003-Allow-passing-multiple-image-files-to-the-initrd-com.patch
-patch -p1 < berry/0004-Obey-2.06-boot-protocol-s-cmdline_size.patch
+#patch -p1 < berry/0001-Get-rid-of-usr-bin-cmp-dependency.patch
+#patch -p1 < berry/0002-Add-strspn-strcspn-and-strtok_r.patch
+#patch -p1 < berry/0003-Allow-passing-multiple-image-files-to-the-initrd-com.patch
+#patch -p1 < berry/0004-Obey-2.06-boot-protocol-s-cmdline_size.patch
 
-patch -p1 < berry/grub-0.97-printf_hex.patch
-patch -p1 < berry/grub-0.97-eficd.patch
-patch -p1 < berry/grub-0.97-xfs-buildfix.patch
-patch -p1 < berry/grub-0.97-efigraph-use-blt.patch
-patch -p1 < berry/grub-0.97-efislice.patch
-patch -p1 < berry/grub-0.97-efistatus.patch
-patch -p1 < berry/grub-0.97-fat-lowercase.patch
-patch -p1 < berry/grub-0.97-efipxe.patch
-patch -p1 < berry/grub-0.97-tolower.patch
-patch -p1 < berry/grub-low-memory.patch
-patch -p1 < berry/grub-install_virtio_blk_support.patch
-patch -p1 < berry/grub-fix-memory-corruption.patch
-patch -p1 < berry/grub-ext4-support.patch
-patch -p1 < berry/grub-0.97-xfs-writable-strings.patch
-patch -p1 < berry/grub-0.97-partitionable-md.patch
-patch -p1 < berry/grub-0.97-relocatable-kernel-on-x86_64-uefi.patch
-patch -p1 < berry/grub-0.97-use-gnuefi.patch
+#patch -p1 < berry/grub-0.97-printf_hex.patch
+#patch -p1 < berry/grub-0.97-eficd.patch
+#patch -p1 < berry/grub-0.97-xfs-buildfix.patch
+#patch -p1 < berry/grub-0.97-efigraph-use-blt.patch
+#patch -p1 < berry/grub-0.97-efislice.patch
+#patch -p1 < berry/grub-0.97-efistatus.patch
+#patch -p1 < berry/grub-0.97-fat-lowercase.patch
+#patch -p1 < berry/grub-0.97-efipxe.patch
+#patch -p1 < berry/grub-0.97-tolower.patch
+#patch -p1 < berry/grub-low-memory.patch
+#patch -p1 < berry/grub-install_virtio_blk_support.patch
+#patch -p1 < berry/grub-fix-memory-corruption.patch
+#patch -p1 < berry/grub-ext4-support.patch
+#patch -p1 < berry/grub-0.97-xfs-writable-strings.patch
+#patch -p1 < berry/grub-0.97-partitionable-md.patch
+#patch -p1 < berry/grub-0.97-relocatable-kernel-on-x86_64-uefi.patch
+#patch -p1 < berry/grub-0.97-use-gnuefi.patch
 
 # for NTFS
 patch -p1 < berry/ntfs-patch
 patch -p1 < berry/fsys_ntfs.c.patch
 #cp -a berry/fsys_ntfs.c stage2/
 
-sed -e "s:-Wl,-Bstatic -lncurses -ltinfo -Wl,-Bdynamic:-lncurses:" -i configure.in
-sed -e "s:-Wl,-Bstatic -lcurses -ltinfo -Wl,-Bdynamic:-lcurses:" -i configure.in
+#sed -e "s:-Wl,-Bstatic -lncurses -ltinfo -Wl,-Bdynamic:-lncurses:" -i configure.in
+#sed -e "s:-Wl,-Bstatic -lcurses -ltinfo -Wl,-Bdynamic:-lcurses:" -i configure.in
 
 %build
-autoreconf
-autoconf
+autoupdate
+autoreconf -i
+#autoconf
 GCCVERS=$(gcc --version | head -1 | cut -d\  -f3 | cut -d. -f1)
 #CFLAGS="-Os -g -fno-strict-aliasing -Wall -Werror -Wno-shadow -Wno-unused"
-CFLAGS="-Os -fno-strict-aliasing -Wall -Werror -Wno-shadow -Wno-unused"
+#CFLAGS="-Os -fno-strict-aliasing -Wall -Werror -Wno-shadow -Wno-unused -Wno-misleading-indentation"
+CFLAGS="-Os -fno-strict-aliasing -Wall"
 if [ "$GCCVERS" == "4" ]; then
 	CFLAGS="$CFLAGS -Wno-pointer-sign"
 fi
 export CFLAGS
-#%configure --sbindir=/sbin --disable-auto-linux-mem-opt --datarootdir=%{_datadir} --with-platform=efi
+#configure --sbindir=/sbin --disable-auto-linux-mem-opt --datarootdir=%{_datadir} --with-platform=efi
 #make
 #mv efi/grub.efi .
 #make clean
@@ -121,13 +120,16 @@ rm -fr $RPM_BUILD_ROOT
 /sbin/grub
 /sbin/grub-install
 #/sbin/grub-terminfo
-/sbin/grub-md5-crypt
-#%{_bindir}/mbchk
-#%{_infodir}/grub*
-#%{_infodir}/multiboot*
-#%{_mandir}/man*/*
-%{_datadir}/grub
+#/sbin/grub-md5-crypt
+#{_bindir}/mbchk
+#{_infodir}/grub*
+#{_infodir}/multiboot*
+#{_mandir}/man*/*
+#{_datadir}/grub
+%{_libdir}/grub
 
 %changelog
+* Mon Feb 11 2019 Yuichiro Nakada <berry@berry-lab.net>
+- Update
 * Wed Dec 30 2009 Yuichiro Nakada <berry@po.yui.mine.nu>
 - Create for Berry Linux

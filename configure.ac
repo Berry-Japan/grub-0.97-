@@ -12,11 +12,16 @@ dnl "AS IS" CONDITION.  THE FREE SOFTWARE FOUNDATION DISCLAIMS ANY
 dnl LIABILITY OF ANY KIND FOR ANY DAMAGES WHATSOEVER RESULTING FROM THE
 dnl USE OF THIS SOFTWARE.
 
-AC_PREREQ(2.57)
-AC_INIT([GRUB], [0.97], [bug-grub@gnu.org])
+AC_PREREQ([2.69])
+AC_INIT([GRUB],[0.97],[bug-grub@gnu.org])
 AC_CONFIG_SRCDIR([stage2/stage2.c])
 AC_CONFIG_HEADER([config.h])
 AM_INIT_AUTOMAKE
+AM_SILENT_RULES([yes])
+
+dnl Generate stage2/grub4dos_version.h
+echo "#define GRUB4DOS_VERSION \"`cat grub4dos_version` `date -u +%Y-%m-%d`\"" > grub4dos_version.h
+echo "#define GRUB4DOS_INT_VER `date -u +%Y%m%d`" > grub4dos_int_ver.h
 
 AC_CANONICAL_HOST
 
@@ -42,17 +47,21 @@ if test "x$enable_maintainer_mode" = xyes; then
 fi
 
 # This should be checked before AC_PROG_CC
-if test "x$CFLAGS" = x; then
+if test "x$ac_env_CFLAGS_set" = x; then
   default_CFLAGS=yes
 fi
 
 if test "x$host_cpu" = xx86_64; then
-  CFLAGS="-m32 $CFLAGS"
+  CFLAGS="-m32 -mno-sse $CFLAGS"
 fi
+
+AC_SUBST(default_CFLAGS)
 
 #
 # Programs
 #
+
+AM_PROG_AS
 
 AC_CHECK_TOOL(CC, gcc)
 AC_PROG_CC
@@ -76,7 +85,7 @@ else
 fi
 
 # optimization flags
-if test "x$ac_cv_prog_gcc" = xyes; then
+if test "x$ac_cv_c_compiler_gnu" = xyes; then
   if test "x$default_CFLAGS" = xyes; then
     # Autoconf may set CFLAGS to -O2 and/or -g. So eliminate them.
     CFLAGS="`echo $CFLAGS | sed -e 's/-g//g' -e 's/-O[[0-9]]//g'` -g"
@@ -89,13 +98,13 @@ if test "x$ac_cv_prog_gcc" = xyes; then
     AC_CACHE_CHECK([whether optimization for size works], size_flag, [
       saved_CFLAGS=$CFLAGS
       CFLAGS="-Os -g"
-      AC_TRY_COMPILE(, , size_flag=yes, size_flag=no)
+      AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]], [[]])],[size_flag=yes],[size_flag=no])
       CFLAGS=$saved_CFLAGS
     ])
     if test "x$size_flag" = xyes; then
-      STAGE2_CFLAGS="-Os"
+      STAGE2_CFLAGS="-Os -mpreferred-stack-boundary=2 -momit-leaf-frame-pointer -fno-strict-aliasing -fno-exceptions -fno-asynchronous-unwind-tables -fno-unwind-tables"
     else
-      STAGE2_CFLAGS="-O2 -fno-strength-reduce -fno-unroll-loops"
+      STAGE2_CFLAGS="-O2 -fno-strength-reduce -fno-unroll-loops -mpreferred-stack-boundary=2 -momit-leaf-frame-pointer -fno-strict-aliasing -fno-exceptions -fno-asynchronous-unwind-tables -fno-unwind-tables"
     fi
     # OpenBSD has a GCC extension for protecting applications from
     # stack smashing attacks, but GRUB doesn't want this feature.
@@ -103,10 +112,7 @@ if test "x$ac_cv_prog_gcc" = xyes; then
 		   no_stack_protector_flag, [
       saved_CFLAGS=$CFLAGS
       CFLAGS="-fno-stack-protector"
-      AC_TRY_COMPILE(,
-		     ,
-		     no_stack_protector_flag=yes,
-		     no_stack_protector_flag=no)
+      AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]], [[]])],[no_stack_protector_flag=yes],[no_stack_protector_flag=no])
       CFLAGS=$saved_CFLAGS
     ])
     if test "x$no_stack_protector_flag" = xyes; then
@@ -126,7 +132,7 @@ CPPFLAGS="$CPPFLAGS -Wpointer-arith"
 AC_CACHE_CHECK([whether -Wundef works], undef_flag, [
   saved_CPPFLAGS="$CPPFLAGS"
   CPPFLAGS="-Wundef"
-  AC_TRY_COMPILE(, , undef_flag=yes, undef_flag=no)
+  AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]], [[]])],[undef_flag=yes],[undef_flag=no])
   CPPFLAGS="$saved_CPPFLAGS"
 ])
 
@@ -135,7 +141,7 @@ AC_CACHE_CHECK([whether -Wundef works], undef_flag, [
 AC_CACHE_CHECK([whether -falign-loops works], [falign_loop_flag], [
   saved_CPPFLAGS="$CPPFLAGS"
   CPPFLAGS="-falign-loops=1"
-  AC_TRY_COMPILE(, , [falign_loop_flag=yes], [falign_loop_flag=no])
+  AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]], [[]])],[falign_loop_flag=yes],[falign_loop_flag=no])
   CPPFLAGS="$saved_CPPFLAGS"
 ])
 
@@ -235,6 +241,13 @@ if test x"$enable_fat" != xno; then
   FSYS_CFLAGS="$FSYS_CFLAGS -DFSYS_FAT=1"
 fi
 
+AC_ARG_ENABLE(ntfs,
+  [  --disable-ntfs          disable NTFS support in Stage 2])
+
+if test x"$enable_ntfs" != xno; then
+  FSYS_CFLAGS="$FSYS_CFLAGS -DFSYS_NTFS=1"
+fi
+
 AC_ARG_ENABLE(ffs,
   [  --disable-ffs           disable FFS support in Stage 2])
 
@@ -291,6 +304,19 @@ if test x"$enable_iso9660" != xno; then
   FSYS_CFLAGS="$FSYS_CFLAGS -DFSYS_ISO9660=1"
 fi
 
+AC_ARG_ENABLE(ipxe,
+  [  --disable-ipxe          disable ipxe support in Stage 2])
+
+AC_ARG_ENABLE(pxe,
+  [  --disable-pxe           disable PXE support in Stage 2])
+
+if test x"$enable_pxe" != xno; then
+  FSYS_CFLAGS="$FSYS_CFLAGS -DFSYS_PXE=1"
+  if test x"$enable_ipxe" != xno; then
+    FSYS_CFLAGS="$FSYS_CFLAGS -DFSYS_IPXE=1"
+  fi
+fi
+
 dnl AC_ARG_ENABLE(tftp,
 dnl [  --enable-tftp           enable TFTP support in Stage 2])
 dnl 
@@ -310,6 +336,16 @@ AC_ARG_ENABLE(md5-password,
 if test "x$enable_md5_password" != xno; then
   FSYS_CFLAGS="$FSYS_CFLAGS -DUSE_MD5_PASSWORDS=1"
 fi
+
+dnl Graphical splashscreen support
+AC_ARG_ENABLE(graphics,
+  [  --disable-graphics      disable graphics terminal support])
+AM_CONDITIONAL(GRAPHICS_SUPPORT, test "x$enable_graphics" != xno)
+
+dnl gfxmenu support
+AC_ARG_ENABLE(gfxmenu,
+  [  --disable-gfxmenu       disable gfxmenu support])
+AM_CONDITIONAL(GFX_SUPPORT, test "x$enable_gfxmenu" != xno)
 
 dnl The netboot support.
 dnl General options.
